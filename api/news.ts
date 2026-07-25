@@ -1,5 +1,5 @@
-import { fetchLatestNews } from '../server/fetchNews'
-import type { NewsApiResponse } from '../src/types'
+import { fetchLatestNews } from '../server/fetchNews.js'
+import type { NewsApiResponse } from '../src/types.js'
 
 export const config = {
   runtime: 'edge',
