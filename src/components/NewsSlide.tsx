@@ -1,7 +1,10 @@
 import { useEffect, useRef, useState } from 'react'
 import type { NewsItem } from '../types'
 import { genres } from '../data/news'
+import { formatRelativeTime } from '../utils/format'
 import { ActionRail } from './ActionRail'
+
+type DetailFocus = 'overview' | string
 
 type Props = {
   item: NewsItem
@@ -9,8 +12,10 @@ type Props = {
   isActive: boolean
   liked: boolean
   saved: boolean
+  detailOpen: boolean
   onLike: () => void
   onSave: () => void
+  onOpenDetail: (focus: DetailFocus) => void
 }
 
 export function NewsSlide({
@@ -19,8 +24,10 @@ export function NewsSlide({
   isActive,
   liked,
   saved,
+  detailOpen,
   onLike,
   onSave,
+  onOpenDetail,
 }: Props) {
   const videoRef = useRef<HTMLVideoElement>(null)
   const [paused, setPaused] = useState(false)
@@ -40,7 +47,8 @@ export function NewsSlide({
     const video = videoRef.current
     if (!video || videoFailed) return
 
-    if (isActive && !paused) {
+    const shouldPlay = isActive && !paused && !detailOpen
+    if (shouldPlay) {
       const playPromise = video.play()
       if (playPromise) playPromise.catch(() => undefined)
     } else {
@@ -51,7 +59,7 @@ export function NewsSlide({
         setPaused(false)
       }
     }
-  }, [isActive, paused, videoFailed])
+  }, [isActive, paused, videoFailed, detailOpen])
 
   useEffect(() => {
     const video = videoRef.current
@@ -67,7 +75,7 @@ export function NewsSlide({
   }, [isActive, videoFailed])
 
   const togglePause = () => {
-    if (!isActive) return
+    if (!isActive || detailOpen) return
     setPaused((value) => !value)
   }
 
@@ -121,7 +129,7 @@ export function NewsSlide({
           />
         )}
         <div className="slide-scrim" aria-hidden="true" />
-        {paused && isActive && (
+        {paused && isActive && !detailOpen && (
           <span className="pause-mark" aria-hidden="true">
             <svg viewBox="0 0 24 24">
               <path d="M8 6v12l10-6-10-6z" fill="currentColor" />
@@ -137,10 +145,32 @@ export function NewsSlide({
       <div className="slide-meta">
         <div className="meta-top">
           <span className="genre-tag">{genreLabel}</span>
-          <span className="meta-time">{item.publishedAt}</span>
+          <span className="ai-badge">AI要約</span>
+          <span className="meta-time">{formatRelativeTime(item.publishedAt)}</span>
         </div>
         <h2 className="slide-title">{item.title}</h2>
         <p className="slide-summary">{item.summary}</p>
+
+        <div className="related-row" aria-label="関連トピック">
+          <button
+            type="button"
+            className="related-btn is-primary"
+            onClick={() => onOpenDetail('overview')}
+          >
+            詳しく
+          </button>
+          {item.related.map((topic) => (
+            <button
+              key={topic.id}
+              type="button"
+              className="related-btn"
+              onClick={() => onOpenDetail(topic.id)}
+            >
+              {topic.label}
+            </button>
+          ))}
+        </div>
+
         <p className="slide-source">{item.source}</p>
       </div>
 

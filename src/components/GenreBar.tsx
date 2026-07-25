@@ -1,14 +1,24 @@
-import type { Genre, GenreId } from '../types'
+import type { FeedTabId, Genre } from '../types'
 
 type Props = {
   genres: Genre[]
-  active: GenreId
-  onChange: (id: GenreId) => void
+  active: FeedTabId
+  onChange: (id: FeedTabId) => void
+  onEdit: () => void
 }
 
-export function GenreBar({ genres, active, onChange }: Props) {
+export function GenreBar({ genres, active, onChange, onEdit }: Props) {
   return (
-    <div className="genre-bar" role="tablist" aria-label="ジャンル">
+    <div className="genre-bar" role="tablist" aria-label="マイジャンル">
+      <button
+        type="button"
+        role="tab"
+        aria-selected={active === 'mine'}
+        className={`genre-chip${active === 'mine' ? ' is-active' : ''}`}
+        onClick={() => onChange('mine')}
+      >
+        マイ
+      </button>
       {genres.map((genre) => {
         const isActive = genre.id === active
         return (
@@ -24,6 +34,14 @@ export function GenreBar({ genres, active, onChange }: Props) {
           </button>
         )
       })}
+      <button
+        type="button"
+        className="genre-edit"
+        onClick={onEdit}
+        aria-label="ジャンルを編集"
+      >
+        編集
+      </button>
     </div>
   )
 }
