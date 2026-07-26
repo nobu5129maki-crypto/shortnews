@@ -10,17 +10,208 @@ export type { NewsApiResponse }
 type FeedSource = {
   genre: ContentGenreId
   url: string
+  label: string
+  limit?: number
 }
 
+/** ジャンル別の専門メディア + NHK（補完） */
 const FEEDS: FeedSource[] = [
-  { genre: 'politics', url: 'https://www.nhk.or.jp/rss/news/cat4.xml' },
-  { genre: 'business', url: 'https://www.nhk.or.jp/rss/news/cat5.xml' },
-  { genre: 'science', url: 'https://www.nhk.or.jp/rss/news/cat3.xml' },
-  { genre: 'world', url: 'https://www.nhk.or.jp/rss/news/cat6.xml' },
-  { genre: 'sports', url: 'https://www.nhk.or.jp/rss/news/cat7.xml' },
-  { genre: 'entertainment', url: 'https://www.nhk.or.jp/rss/news/cat2.xml' },
-  { genre: 'life', url: 'https://www.nhk.or.jp/rss/news/cat1.xml' },
-  { genre: 'tech', url: 'https://rss.itmedia.co.jp/rss/2.0/news_bursts.xml' },
+  // 政治
+  {
+    genre: 'politics',
+    url: 'https://www.nhk.or.jp/rss/news/cat4.xml',
+    label: 'NHK NEWS WEB',
+    limit: 8,
+  },
+  {
+    genre: 'politics',
+    url: 'https://news.yahoo.co.jp/rss/categories/domestic.xml',
+    label: 'Yahoo!ニュース 国内',
+    limit: 10,
+  },
+  {
+    genre: 'politics',
+    url: 'https://www.asahi.com/rss/asahi/newsheadlines.rdf',
+    label: '朝日新聞',
+    limit: 8,
+  },
+  {
+    genre: 'politics',
+    url: 'https://mainichi.jp/rss/etc/mainichi-flash.rss',
+    label: '毎日新聞',
+    limit: 8,
+  },
+
+  // 経済
+  {
+    genre: 'business',
+    url: 'https://www.nhk.or.jp/rss/news/cat5.xml',
+    label: 'NHK NEWS WEB',
+    limit: 8,
+  },
+  {
+    genre: 'business',
+    url: 'https://news.yahoo.co.jp/rss/categories/business.xml',
+    label: 'Yahoo!ニュース 経済',
+    limit: 10,
+  },
+  {
+    genre: 'business',
+    url: 'https://toyokeizai.net/list/feed/rss',
+    label: '東洋経済オンライン',
+    limit: 8,
+  },
+  {
+    genre: 'business',
+    url: 'https://assets.wor.jp/rss/rdf/nikkei/news.rdf',
+    label: '日本経済新聞',
+    limit: 8,
+  },
+
+  // テック
+  {
+    genre: 'tech',
+    url: 'https://rss.itmedia.co.jp/rss/2.0/news_bursts.xml',
+    label: 'ITmedia NEWS',
+    limit: 10,
+  },
+  {
+    genre: 'tech',
+    url: 'https://news.yahoo.co.jp/rss/categories/it.xml',
+    label: 'Yahoo!ニュース IT',
+    limit: 10,
+  },
+  {
+    genre: 'tech',
+    url: 'https://pc.watch.impress.co.jp/data/rss/1.0/pcw/feed.rdf',
+    label: 'PC Watch',
+    limit: 8,
+  },
+  {
+    genre: 'tech',
+    url: 'https://www.publickey1.jp/atom.xml',
+    label: 'Publickey',
+    limit: 8,
+  },
+  {
+    genre: 'tech',
+    url: 'https://gigazine.net/news/rss_2.0/',
+    label: 'GIGAZINE',
+    limit: 8,
+  },
+
+  // AI
+  {
+    genre: 'ai',
+    url: 'https://rss.itmedia.co.jp/rss/2.0/aiplus.xml',
+    label: 'ITmedia AI+',
+    limit: 12,
+  },
+  {
+    genre: 'ai',
+    url: 'https://news.yahoo.co.jp/rss/categories/it.xml',
+    label: 'Yahoo!ニュース IT',
+    limit: 12,
+  },
+  // スポーツ
+  {
+    genre: 'sports',
+    url: 'https://www.nhk.or.jp/rss/news/cat7.xml',
+    label: 'NHK NEWS WEB',
+    limit: 8,
+  },
+  {
+    genre: 'sports',
+    url: 'https://news.yahoo.co.jp/rss/categories/sports.xml',
+    label: 'Yahoo!ニュース スポーツ',
+    limit: 10,
+  },
+  {
+    genre: 'sports',
+    url: 'https://www.soccer-king.jp/feed',
+    label: 'サッカーキング',
+    limit: 8,
+  },
+  {
+    genre: 'sports',
+    url: 'https://baseballking.jp/feed',
+    label: 'ベースボールキング',
+    limit: 8,
+  },
+
+  // エンタメ
+  {
+    genre: 'entertainment',
+    url: 'https://www.nhk.or.jp/rss/news/cat2.xml',
+    label: 'NHK NEWS WEB',
+    limit: 8,
+  },
+  {
+    genre: 'entertainment',
+    url: 'https://news.yahoo.co.jp/rss/categories/entertainment.xml',
+    label: 'Yahoo!ニュース エンタメ',
+    limit: 12,
+  },
+
+  // 国際
+  {
+    genre: 'world',
+    url: 'https://www.nhk.or.jp/rss/news/cat6.xml',
+    label: 'NHK NEWS WEB',
+    limit: 8,
+  },
+  {
+    genre: 'world',
+    url: 'https://news.yahoo.co.jp/rss/categories/world.xml',
+    label: 'Yahoo!ニュース 国際',
+    limit: 12,
+  },
+
+  // 科学
+  {
+    genre: 'science',
+    url: 'https://www.nhk.or.jp/rss/news/cat3.xml',
+    label: 'NHK NEWS WEB',
+    limit: 8,
+  },
+  {
+    genre: 'science',
+    url: 'https://news.yahoo.co.jp/rss/categories/science.xml',
+    label: 'Yahoo!ニュース 科学',
+    limit: 12,
+  },
+  {
+    genre: 'tech',
+    url: 'https://www.watch.impress.co.jp/data/rss/1.0/ipw/feed.rdf',
+    label: 'INTERNET Watch',
+    limit: 8,
+  },
+
+  // ライフ
+  {
+    genre: 'life',
+    url: 'https://www.nhk.or.jp/rss/news/cat1.xml',
+    label: 'NHK NEWS WEB',
+    limit: 8,
+  },
+  {
+    genre: 'life',
+    url: 'https://news.yahoo.co.jp/rss/categories/life.xml',
+    label: 'Yahoo!ニュース ライフ',
+    limit: 10,
+  },
+  {
+    genre: 'life',
+    url: 'https://www.lifehacker.jp/feed/index.xml',
+    label: 'Lifehacker Japan',
+    limit: 8,
+  },
+  {
+    genre: 'life',
+    url: 'https://www.roomie.jp/feed/',
+    label: 'ROOMIE',
+    limit: 8,
+  },
 ]
 
 const VIDEOS = [
@@ -72,7 +263,7 @@ const POSTERS: Record<ContentGenreId, string[]> = {
 }
 
 const AI_PATTERN =
-  /AI|ＡＩ|人工知能|生成AI|ChatGPT|GPT|機械学習|LLM|オンデバイス|大規模言語|ディープラーニング|チャットボ[ッッ]ト/i
+  /AI|ＡＩ|人工知能|生成AI|ChatGPT|GPT|機械学習|LLM|オンデバイス|大規模言語|ディープラーニング|チャットボ[ッッ]ト|生成系/i
 
 type RssItem = {
   title: string
@@ -101,19 +292,64 @@ function tagValue(block: string, tag: string): string {
   return match ? decodeXml(match[1]) : ''
 }
 
-function parseRss(xml: string): RssItem[] {
-  const chunks = [...xml.matchAll(/<item>([\s\S]*?)<\/item>/gi)]
-  return chunks
-    .map((chunk) => {
-      const block = chunk[1]
-      return {
-        title: tagValue(block, 'title'),
-        link: tagValue(block, 'link') || tagValue(block, 'guid'),
-        description: tagValue(block, 'description'),
-        pubDate: tagValue(block, 'pubDate'),
-      }
-    })
-    .filter((item) => item.title && item.description)
+function linkValue(block: string, attrs = ''): string {
+  const hrefInBlock = block.match(
+    /<link[^>]*rel=["']alternate["'][^>]*href=["']([^"']+)["'][^>]*\/?>/i,
+  )
+  if (hrefInBlock) return hrefInBlock[1]
+
+  const anyHref = block.match(/<link[^>]*href=["']([^"']+)["'][^>]*\/?>/i)
+  if (anyHref) return anyHref[1]
+
+  const about = attrs.match(/(?:rdf:)?about=["']([^"']+)["']/i)
+  if (about) return about[1]
+
+  return tagValue(block, 'link') || tagValue(block, 'guid') || tagValue(block, 'id')
+}
+
+function descriptionValue(block: string): string {
+  return (
+    tagValue(block, 'description') ||
+    tagValue(block, 'summary') ||
+    tagValue(block, 'content:encoded') ||
+    tagValue(block, 'content') ||
+    tagValue(block, 'dc:description')
+  )
+}
+
+function dateValue(block: string): string {
+  return (
+    tagValue(block, 'pubDate') ||
+    tagValue(block, 'published') ||
+    tagValue(block, 'updated') ||
+    tagValue(block, 'dc:date') ||
+    tagValue(block, 'date')
+  )
+}
+
+function parseFeed(xml: string): RssItem[] {
+  const itemChunks = [
+    ...xml.matchAll(/<item\b([^>]*)>([\s\S]*?)<\/item>/gi),
+  ]
+  const entryChunks = [
+    ...xml.matchAll(/<entry\b([^>]*)>([\s\S]*?)<\/entry>/gi),
+  ]
+
+  const parsed = [...itemChunks, ...entryChunks].map((chunk) => {
+    const attrs = chunk[1] ?? ''
+    const block = chunk[2] ?? ''
+    const title =
+      tagValue(block, 'title') || tagValue(block, 'dc:title')
+    const description = descriptionValue(block) || title
+    return {
+      title,
+      link: linkValue(block, attrs),
+      description,
+      pubDate: dateValue(block),
+    }
+  })
+
+  return parsed.filter((item) => item.title)
 }
 
 function hashId(input: string): number {
@@ -126,6 +362,12 @@ function hashId(input: string): number {
 
 function pick<T>(list: T[], seed: number): T {
   return list[seed % list.length]
+}
+
+function toIso(value: string): string {
+  const time = Date.parse(value)
+  if (Number.isNaN(time)) return new Date().toISOString()
+  return new Date(time).toISOString()
 }
 
 function splitSentences(text: string): string[] {
@@ -175,6 +417,20 @@ function buildRelated(title: string, description: string): RelatedTopic[] {
   ]
 }
 
+function resolveGenre(
+  assigned: ContentGenreId,
+  title: string,
+  description: string,
+): ContentGenreId {
+  if (assigned === 'ai') return 'ai'
+  if (AI_PATTERN.test(`${title} ${description}`)) {
+    if (assigned === 'tech' || assigned === 'science' || assigned === 'business') {
+      return 'ai'
+    }
+  }
+  return assigned
+}
+
 function toNewsItem(
   item: RssItem,
   genre: ContentGenreId,
@@ -183,16 +439,7 @@ function toNewsItem(
   const seed = hashId(item.link || item.title)
   const description = item.description || item.title
   const summary = buildSummary(description)
-  const resolvedGenre: ContentGenreId =
-    genre === 'tech' && AI_PATTERN.test(`${item.title} ${description}`)
-      ? 'ai'
-      : genre === 'science' && AI_PATTERN.test(`${item.title} ${description}`)
-        ? 'ai'
-        : genre === 'business' && AI_PATTERN.test(`${item.title} ${description}`)
-          ? 'ai'
-          : genre
-
-  const iso = item.pubDate ? new Date(item.pubDate).toISOString() : new Date().toISOString()
+  const resolvedGenre = resolveGenre(genre, item.title, description)
 
   return {
     id: `live-${seed.toString(16)}`,
@@ -203,7 +450,7 @@ function toNewsItem(
     keyPoints: buildKeyPoints(item.title, description),
     related: buildRelated(item.title, description),
     source: sourceLabel,
-    publishedAt: iso,
+    publishedAt: toIso(item.pubDate),
     url: item.link || undefined,
     videoUrl: pick(VIDEOS, seed),
     posterUrl: pick(POSTERS[resolvedGenre], seed),
@@ -215,17 +462,29 @@ function toNewsItem(
 async function fetchFeed(source: FeedSource): Promise<NewsItem[]> {
   const response = await fetch(source.url, {
     headers: {
-      Accept: 'application/rss+xml, application/xml, text/xml, */*',
-      'User-Agent': 'BRIEF-NewsBot/1.0',
+      Accept:
+        'application/rss+xml, application/atom+xml, application/xml, text/xml, */*',
+      'User-Agent': 'BRIEF-NewsBot/1.0 (+https://shortnews-theta.vercel.app)',
     },
   })
   if (!response.ok) {
-    throw new Error(`RSS ${source.genre} failed: ${response.status}`)
+    throw new Error(`RSS ${source.label} failed: ${response.status}`)
   }
   const xml = await response.text()
-  const items = parseRss(xml)
-  const label = source.url.includes('itmedia') ? 'ITmedia NEWS' : 'NHK NEWS WEB'
-  return items.slice(0, 12).map((item) => toNewsItem(item, source.genre, label))
+  const items = parseFeed(xml)
+  const limit = source.limit ?? 10
+
+  // AI枠の汎用フィードはAI関連のみ残す
+  const filtered =
+    source.genre === 'ai' && !source.url.includes('aiplus')
+      ? items.filter((item) =>
+          AI_PATTERN.test(`${item.title} ${item.description}`),
+        )
+      : items
+
+  return filtered
+    .slice(0, limit)
+    .map((item) => toNewsItem(item, source.genre, source.label))
 }
 
 function dedupe(items: NewsItem[]): NewsItem[] {
@@ -240,22 +499,82 @@ function dedupe(items: NewsItem[]): NewsItem[] {
   return result
 }
 
-export async function fetchLatestNews(): Promise<NewsItem[]> {
-  const settled = await Promise.allSettled(FEEDS.map((feed) => fetchFeed(feed)))
-  const collected: NewsItem[] = []
-
-  for (const result of settled) {
-    if (result.status === 'fulfilled') collected.push(...result.value)
+function balanceByGenre(
+  items: NewsItem[],
+  perGenre = 14,
+  total = 120,
+): NewsItem[] {
+  const groups = new Map<ContentGenreId, NewsItem[]>()
+  for (const item of items) {
+    const list = groups.get(item.genre) ?? []
+    list.push(item)
+    groups.set(item.genre, list)
   }
 
-  // AI枠: 他ジャンルからAI関連を抽出して優先付与
-  const aiExtra = collected
-    .filter((item) => AI_PATTERN.test(`${item.title} ${item.summary}`))
-    .map((item) => ({ ...item, genre: 'ai' as const, id: `${item.id}-ai` }))
+  const picked: NewsItem[] = []
+  for (const list of groups.values()) {
+    list.sort(
+      (a, b) =>
+        new Date(b.publishedAt).getTime() - new Date(a.publishedAt).getTime(),
+    )
+    picked.push(...list.slice(0, perGenre))
+  }
 
-  const merged = dedupe([...aiExtra, ...collected]).sort(
-    (a, b) => new Date(b.publishedAt).getTime() - new Date(a.publishedAt).getTime(),
+  return picked
+    .sort(
+      (a, b) =>
+        new Date(b.publishedAt).getTime() - new Date(a.publishedAt).getTime(),
+    )
+    .slice(0, total)
+}
+
+async function mapSettled<T, R>(
+  items: T[],
+  concurrency: number,
+  worker: (item: T) => Promise<R>,
+): Promise<PromiseSettledResult<R>[]> {
+  const results: PromiseSettledResult<R>[] = new Array(items.length)
+  let index = 0
+
+  async function run() {
+    while (index < items.length) {
+      const current = index
+      index += 1
+      try {
+        results[current] = {
+          status: 'fulfilled',
+          value: await worker(items[current]),
+        }
+      } catch (reason) {
+        results[current] = { status: 'rejected', reason }
+      }
+    }
+  }
+
+  await Promise.all(
+    Array.from({ length: Math.min(concurrency, items.length) }, () => run()),
   )
+  return results
+}
 
-  return merged.slice(0, 80)
+export async function fetchLatestNews(): Promise<NewsItem[]> {
+  const settled = await mapSettled(FEEDS, 5, (feed) => fetchFeed(feed))
+  const collected: NewsItem[] = []
+  const failures: string[] = []
+
+  for (let i = 0; i < settled.length; i += 1) {
+    const result = settled[i]
+    if (result.status === 'fulfilled') {
+      collected.push(...result.value)
+    } else {
+      failures.push(`${FEEDS[i].label}(${FEEDS[i].genre})`)
+      console.warn('[news]', FEEDS[i].label, result.reason)
+    }
+  }
+
+  if (failures.length) {
+    console.warn('[news] failed feeds:', failures.join(', '))
+  }
+
+  return balanceByGenre(dedupe(collected))
 }
