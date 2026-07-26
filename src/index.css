@@ -59,6 +59,8 @@ button {
 
 .app-shell {
   position: relative;
+  display: flex;
+  flex-direction: column;
   width: min(100%, 430px);
   height: 100%;
   min-height: 100dvh;
@@ -82,34 +84,42 @@ button {
   }
 }
 
-.top-bar {
-  position: absolute;
-  top: 0;
-  left: 0;
-  right: 0;
+.chrome {
+  position: relative;
   z-index: 30;
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  padding: calc(14px + var(--safe-top)) 18px 0;
-  pointer-events: none;
+  flex: 0 0 auto;
+  padding: calc(12px + var(--safe-top)) 14px 8px;
+  background: linear-gradient(180deg, rgba(7, 16, 24, 0.96) 0%, rgba(7, 16, 24, 0.88) 100%);
+}
+
+.chrome-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: start;
+  column-gap: 16px;
 }
 
 .brand-block {
-  pointer-events: none;
+  min-width: 0;
+  grid-column: 1;
 }
 
 .top-actions {
+  grid-column: 2;
   display: flex;
   flex-direction: column;
   align-items: flex-end;
-  gap: 10px;
-  pointer-events: auto;
+  gap: 6px;
+}
+
+.top-action-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
 }
 
 .prefs-btn,
 .refresh-btn {
-  margin-top: 4px;
   padding: 6px 10px;
   font-size: 0.72rem;
   font-weight: 700;
@@ -132,21 +142,21 @@ button {
   cursor: wait;
 }
 
-.update-status {
-  position: absolute;
-  top: calc(52px + var(--safe-top));
-  left: 18px;
-  right: 18px;
-  z-index: 30;
+.chrome-meta {
   display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
+  align-items: center;
+  margin-top: 8px;
+}
+
+.update-status {
+  margin: 0;
+  max-width: 9.5rem;
+  text-align: right;
   font-size: 0.68rem;
   font-weight: 600;
   letter-spacing: 0.04em;
   color: rgba(255, 255, 255, 0.55);
-  pointer-events: none;
-  text-shadow: 0 1px 8px rgba(0, 0, 0, 0.45);
+  white-space: nowrap;
 }
 
 .update-error {
@@ -156,7 +166,7 @@ button {
 .brand {
   margin: 0;
   font-family: var(--font-brand);
-  font-size: clamp(2rem, 7vw, 2.45rem);
+  font-size: clamp(1.85rem, 6.5vw, 2.3rem);
   font-weight: 800;
   letter-spacing: -0.04em;
   line-height: 0.9;
@@ -173,10 +183,10 @@ button {
 }
 
 .live-pill {
-  pointer-events: none;
   display: inline-flex;
   align-items: center;
   gap: 6px;
+  flex: 0 0 auto;
   font-size: 0.68rem;
   font-weight: 700;
   letter-spacing: 0.14em;
@@ -205,18 +215,13 @@ button {
 }
 
 .genre-bar {
-  position: absolute;
-  top: calc(78px + var(--safe-top));
-  left: 0;
-  right: 0;
-  z-index: 30;
   display: flex;
   gap: 4px;
-  padding: 0 14px;
+  margin-top: 10px;
+  padding: 0;
   overflow-x: auto;
   scrollbar-width: none;
   mask-image: linear-gradient(90deg, #000 88%, transparent);
-  pointer-events: auto;
 }
 
 .genre-bar::-webkit-scrollbar {
@@ -258,26 +263,10 @@ button {
   transform: scale(0.96);
 }
 
-.genre-edit {
-  flex: 0 0 auto;
-  margin-left: 4px;
-  padding: 8px 12px;
-  font-size: 0.78rem;
-  font-weight: 700;
-  letter-spacing: 0.04em;
-  color: var(--mint);
-  border: 1px solid rgba(46, 230, 166, 0.35);
-  transition: background 160ms ease, transform 160ms ease;
-}
-
-.genre-edit:active {
-  transform: scale(0.96);
-  background: rgba(46, 230, 166, 0.12);
-}
-
 .feed {
-  position: absolute;
-  inset: 0;
+  position: relative;
+  flex: 1 1 auto;
+  min-height: 0;
   overflow-y: auto;
   scroll-snap-type: y mandatory;
   scroll-behavior: smooth;
@@ -652,18 +641,6 @@ button {
   100% {
     opacity: 0;
   }
-}
-
-.feed-footer {
-  position: absolute;
-  left: 18px;
-  bottom: calc(10px + var(--safe-bottom));
-  z-index: 25;
-  font-size: 0.7rem;
-  font-weight: 600;
-  letter-spacing: 0.08em;
-  color: rgba(255, 255, 255, 0.4);
-  pointer-events: none;
 }
 
 .empty-state {

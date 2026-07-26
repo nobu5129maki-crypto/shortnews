@@ -124,53 +124,49 @@ export function Feed({ myGenres, onReplaceGenres }: Props) {
 
   return (
     <div className="app-shell">
-      <header className="top-bar">
-        <div className="brand-block">
-          <p className="brand">BRIEF</p>
-          <p className="brand-sub">YOUR NEWS</p>
+      <header className="chrome">
+        <div className="chrome-row">
+          <div className="brand-block">
+            <p className="brand">BRIEF</p>
+            <p className="brand-sub">YOUR NEWS</p>
+          </div>
+          <div className="top-actions">
+            <div className="top-action-row">
+              <button
+                type="button"
+                className={`refresh-btn${refreshing ? ' is-busy' : ''}`}
+                onClick={() => void refresh()}
+                disabled={refreshing}
+                aria-label="ニュースを更新"
+              >
+                {refreshing ? '更新中' : '更新'}
+              </button>
+              <button
+                type="button"
+                className="prefs-btn"
+                onClick={() => setEditorOpen(true)}
+                aria-label="ジャンル設定"
+              >
+                設定
+              </button>
+            </div>
+            <p className="update-status" aria-live="polite">
+              {loading && !updatedAt && '取得中…'}
+              {!loading && updatedAt && `更新 ${formatClock(updatedAt)}`}
+              {error && <span className="update-error">更新失敗</span>}
+            </p>
+          </div>
         </div>
-        <div className="top-actions">
-          <button
-            type="button"
-            className={`refresh-btn${refreshing ? ' is-busy' : ''}`}
-            onClick={() => void refresh()}
-            disabled={refreshing}
-            aria-label="ニュースを更新"
-          >
-            {refreshing ? '更新中' : '更新'}
-          </button>
-          <button
-            type="button"
-            className="prefs-btn"
-            onClick={() => setEditorOpen(true)}
-            aria-label="ジャンル設定"
-          >
-            設定
-          </button>
+
+        <div className="chrome-meta">
           <span className="live-pill" aria-label="最新">
             <span className="live-dot" />
             {source === 'live' ? 'LIVE' : 'DEMO'}
           </span>
         </div>
+
+        <GenreBar genres={barGenres} active={tab} onChange={onTabChange} />
       </header>
-
-      <div className="update-status" aria-live="polite">
-        {loading && !updatedAt && <span>最新ニュースを取得中…</span>}
-        {!loading && updatedAt && (
-          <span>
-            最終更新 {formatClock(updatedAt)}
-            {source === 'live' ? ' · 自動更新ON' : ''}
-          </span>
-        )}
-        {error && <span className="update-error">{error}</span>}
-      </div>
-
-      <GenreBar
-        genres={barGenres}
-        active={tab}
-        onChange={onTabChange}
-        onEdit={() => setEditorOpen(true)}
-      />
 
       <div ref={feedRef} className="feed" aria-label="マイニュースフィード">
         {items.length === 0 ? (
@@ -209,12 +205,6 @@ export function Feed({ myGenres, onReplaceGenres }: Props) {
       </div>
 
       <SwipeHint visible={showHint && items.length > 1 && !editorOpen && !detailOpen} />
-
-      <footer className="feed-footer" aria-hidden="true">
-        <span>
-          {items.length === 0 ? '0' : activeIndex + 1} / {items.length}
-        </span>
-      </footer>
 
       <GenreEditor
         open={editorOpen}

@@ -4,10 +4,9 @@ type Props = {
   genres: Genre[]
   active: FeedTabId
   onChange: (id: FeedTabId) => void
-  onEdit: () => void
 }
 
-export function GenreBar({ genres, active, onChange, onEdit }: Props) {
+export function GenreBar({ genres, active, onChange }: Props) {
   return (
     <div className="genre-bar" role="tablist" aria-label="マイジャンル">
       <button
@@ -34,14 +33,6 @@ export function GenreBar({ genres, active, onChange, onEdit }: Props) {
           </button>
         )
       })}
-      <button
-        type="button"
-        className="genre-edit"
-        onClick={onEdit}
-        aria-label="ジャンルを編集"
-      >
-        編集
-      </button>
     </div>
   )
 }
