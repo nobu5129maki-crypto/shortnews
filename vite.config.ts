@@ -18,10 +18,10 @@ export default defineConfig({
       ],
       manifest: {
         id: '/',
-        name: 'BRIEF — 短尺ニュース',
-        short_name: 'BRIEF',
+        name: 'MYLINE — 興味だけのレーン',
+        short_name: 'MYLINE',
         description:
-          '興味ジャンルの最新ニュースを、縦スワイプでサッと読む短尺ニュースアプリ。',
+          '興味のある情報だけを、上スワイプでさくっと掴むアプリ。',
         lang: 'ja',
         dir: 'ltr',
         start_url: '/',
@@ -29,8 +29,8 @@ export default defineConfig({
         display: 'standalone',
         display_override: ['standalone', 'browser'],
         orientation: 'portrait-primary',
-        background_color: '#071018',
-        theme_color: '#071018',
+        background_color: '#090E18',
+        theme_color: '#090E18',
         categories: ['news', 'magazines'],
         icons: [
           {
@@ -70,7 +70,7 @@ export default defineConfig({
             urlPattern: ({ url }) => url.pathname.startsWith('/api/news'),
             handler: 'NetworkFirst',
             options: {
-              cacheName: 'brief-news-api',
+              cacheName: 'myline-news-api',
               networkTimeoutSeconds: 8,
               expiration: {
                 maxEntries: 8,

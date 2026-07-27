@@ -123,8 +123,11 @@ export function Feed({ myGenres, onAddGenre, onRemoveGenre }: Props) {
       <header className="chrome">
         <div className="chrome-row">
           <div className="brand-block">
-            <p className="brand">BRIEF</p>
-            <p className="brand-sub">YOUR NEWS</p>
+            <p className="brand">
+              <span className="brand-lane" aria-hidden="true" />
+              MYLINE
+            </p>
+            <p className="brand-sub">YOUR LANE</p>
           </div>
           <div className="top-actions">
             <div className="top-action-row">

@@ -55,11 +55,11 @@ export function InstallPrompt() {
     <div className="install-banner" role="dialog" aria-label="アプリをインストール">
       <img className="install-icon" src="/icons/icon-192.png" alt="" width={44} height={44} />
       <div className="install-copy">
-        <p className="install-title">BRIEFをホーム画面へ</p>
+        <p className="install-title">MYLINEをホーム画面へ</p>
         <p className="install-text">
           {isIos && !deferred
             ? '共有ボタンから「ホーム画面に追加」でインストールできます'
-            : 'アプリとして起動でき、すぐ最新ニュースへ'}
+            : '興味だけのレーンを、すぐスワイプで'}
         </p>
       </div>
       <div className="install-actions">

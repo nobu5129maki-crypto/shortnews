@@ -8,7 +8,10 @@ function App() {
   if (!ready) {
     return (
       <div className="boot-shell" aria-busy="true">
-        <p className="brand">BRIEF</p>
+        <p className="brand">
+          <span className="brand-lane" aria-hidden="true" />
+          MYLINE
+        </p>
       </div>
     )
   }

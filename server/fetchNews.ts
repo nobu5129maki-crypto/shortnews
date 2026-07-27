@@ -623,7 +623,7 @@ async function fetchFeed(source: FeedSource): Promise<NewsItem[]> {
     headers: {
       Accept:
         'application/rss+xml, application/atom+xml, application/xml, text/xml, */*',
-      'User-Agent': 'BRIEF-NewsBot/1.0 (+https://shortnews-theta.vercel.app)',
+      'User-Agent': 'MYLINE-NewsBot/1.0 (+https://shortnews-theta.vercel.app)',
     },
   })
   if (!response.ok) {

@@ -60,7 +60,7 @@ export const newsItems: NewsItem[] = [
           '野党は「場当たり的な補正」を懸念し、恒久財源の明示を要求。与党は緊急対応の必要性を強調し、早期成立を優先する姿勢だ。',
       },
     ],
-    source: 'BRIEF政治',
+    source: 'MYLINE政治',
     publishedAt: '12分前',
     videoUrl: videos[0],
     posterUrl:
@@ -95,7 +95,7 @@ export const newsItems: NewsItem[] = [
           'ドル円の円安局面が輸出企業の収益期待を押し上げた。一方で輸入コスト増への警戒も残るため、水準次第で選別が進む可能性がある。',
       },
     ],
-    source: 'BRIEF経済',
+    source: 'MYLINE経済',
     publishedAt: '28分前',
     videoUrl: videos[1],
     posterUrl:
@@ -130,7 +130,7 @@ export const newsItems: NewsItem[] = [
           '装置リードタイムと熟練技術者の不足が量産ペースを左右する。提携先との共同調達でリスク分散を図る方針だ。',
       },
     ],
-    source: 'BRIEFテック',
+    source: 'MYLINEテック',
     publishedAt: '41分前',
     videoUrl: videos[2],
     posterUrl:
@@ -165,7 +165,7 @@ export const newsItems: NewsItem[] = [
           '中3日での試合となるため、疲労管理が重要。守備陣の配置変更と、前線のプレス強度の調整が検討されている。',
       },
     ],
-    source: 'BRIEFスポーツ',
+    source: 'MYLINEスポーツ',
     publishedAt: '1時間前',
     videoUrl: videos[3],
     posterUrl:
@@ -200,7 +200,7 @@ export const newsItems: NewsItem[] = [
           '制作会社は「まずは最終回の反響を見極めたい」とコメント。海外配信の伸びも判断材料になる見通し。',
       },
     ],
-    source: 'BRIEFエンタメ',
+    source: 'MYLINEエンタメ',
     publishedAt: '1時間前',
     videoUrl: videos[4],
     posterUrl:
@@ -235,7 +235,7 @@ export const newsItems: NewsItem[] = [
           '鉄鋼・化学などはコスト増を懸念。移行基金の配分と技術支援のスピードが競争力維持の鍵になる。',
       },
     ],
-    source: 'BRIEF国際',
+    source: 'MYLINE国際',
     publishedAt: '2時間前',
     videoUrl: videos[5],
     posterUrl:
@@ -270,7 +270,7 @@ export const newsItems: NewsItem[] = [
           '急斜面と通信の見通し外が難題。自律着陸アルゴリズムと中継衛星の運用が成功の条件となる。',
       },
     ],
-    source: 'BRIEF科学',
+    source: 'MYLINE科学',
     publishedAt: '3時間前',
     videoUrl: videos[6],
     posterUrl:
@@ -305,7 +305,7 @@ export const newsItems: NewsItem[] = [
           '地価上昇や店舗賃料の負担増を懸念する声もある。公共交通との接続設計が持続性のポイントだ。',
       },
     ],
-    source: 'BRIEFライフ',
+    source: 'MYLINEライフ',
     publishedAt: '3時間前',
     videoUrl: videos[7],
     posterUrl:
@@ -340,7 +340,7 @@ export const newsItems: NewsItem[] = [
           'バックグラウンド通信の説明責任が強まる。正当な用途でもユーザー向けの透明性表示が求められる。',
       },
     ],
-    source: 'BRIEFテック',
+    source: 'MYLINEテック',
     publishedAt: '4時間前',
     videoUrl: videos[8],
     posterUrl:
@@ -375,7 +375,7 @@ export const newsItems: NewsItem[] = [
           'アジア拠点を持つ海外ファンドが日本法人設立を増やし、共同投資を通じて案件獲得を急いでいる。',
       },
     ],
-    source: 'BRIEF経済',
+    source: 'MYLINE経済',
     publishedAt: '5時間前',
     videoUrl: videos[9],
     posterUrl:
@@ -410,7 +410,7 @@ export const newsItems: NewsItem[] = [
           '直近レースで自己ベストを出した選手が軸。海外招待選手との駆け引きも見どころだ。',
       },
     ],
-    source: 'BRIEFスポーツ',
+    source: 'MYLINEスポーツ',
     publishedAt: '6時間前',
     videoUrl: videos[10],
     posterUrl:
@@ -445,7 +445,7 @@ export const newsItems: NewsItem[] = [
           '専門人材の不足が共通課題。広域連携や民間委託でノウハウを共有する動きが広がっている。',
       },
     ],
-    source: 'BRIEF政治',
+    source: 'MYLINE政治',
     publishedAt: '7時間前',
     videoUrl: videos[11],
     posterUrl:
@@ -480,7 +480,7 @@ export const newsItems: NewsItem[] = [
           '若手医師は下調べ時間の短縮を歓迎。ベテラン層は「見落とし防止の二重確認」が負担減の前提だと指摘する。',
       },
     ],
-    source: 'BRIEF AI',
+    source: 'MYLINE AI',
     publishedAt: '18分前',
     videoUrl: videos[12],
     posterUrl:
@@ -515,7 +515,7 @@ export const newsItems: NewsItem[] = [
           '作風の無断学習への懸念が強い。収益還元やクレジット表示を求める声がガイドライン議論を後押しした。',
       },
     ],
-    source: 'BRIEF AI',
+    source: 'MYLINE AI',
     publishedAt: '2時間前',
     videoUrl: videos[13],
     posterUrl:
@@ -550,7 +550,7 @@ export const newsItems: NewsItem[] = [
           '大型モデルはまだクラウド依存が残る。端末側は小型モデルの品質向上と、熱設計の最適化が焦点だ。',
       },
     ],
-    source: 'BRIEF AI',
+    source: 'MYLINE AI',
     publishedAt: '5時間前',
     videoUrl: videos[14],
     posterUrl:
