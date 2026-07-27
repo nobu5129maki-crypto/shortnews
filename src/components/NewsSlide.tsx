@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import type { NewsItem } from '../types'
-import { genres } from '../data/news'
+import { resolveGenre } from '../lib/genres'
 import { formatRelativeTime } from '../utils/format'
 import { ActionRail } from './ActionRail'
 
@@ -34,7 +34,7 @@ export function NewsSlide({
   const [progress, setProgress] = useState(0)
   const [videoFailed, setVideoFailed] = useState(false)
   const [videoReady, setVideoReady] = useState(false)
-  const genreLabel = genres.find((g) => g.id === item.genre)?.label ?? item.genre
+  const genreLabel = resolveGenre(item.genre).label
 
   useEffect(() => {
     setVideoFailed(false)

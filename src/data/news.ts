@@ -1,4 +1,4 @@
-import type { Genre, NewsItem } from '../types'
+import type { BuiltinGenreId, Genre, NewsItem } from '../types'
 
 export const genres: Genre[] = [
   { id: 'politics', label: '政治', blurb: '国会・政策・地方' },
@@ -11,6 +11,8 @@ export const genres: Genre[] = [
   { id: 'science', label: '科学', blurb: '宇宙・研究・発見' },
   { id: 'life', label: 'ライフ', blurb: '暮らし・街・健康' },
 ]
+
+export type { BuiltinGenreId }
 
 const videos = [
   'https://cdn.coverr.co/videos/coverr-newspaper-printing-press-4421/720p.mp4',

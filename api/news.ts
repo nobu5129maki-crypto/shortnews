@@ -11,7 +11,9 @@ export const config = {
 export default async function handler(request: Request): Promise<Response> {
   try {
     const url = new URL(request.url)
-    const genreIds = parseGenreQuery(url.searchParams.get('genres'))
+    const fromG = url.searchParams.getAll('g')
+    const genreIds =
+      fromG.length > 0 ? fromG : parseGenreQuery(url.searchParams.get('genres'))
     const items = await fetchLatestNews(genreIds)
     const body: NewsApiResponse = {
       updatedAt: new Date().toISOString(),

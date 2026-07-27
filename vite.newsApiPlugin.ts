@@ -9,7 +9,9 @@ export function newsApiPlugin(): Plugin {
       server.middlewares.use('/api/news', async (req, res) => {
         try {
           const url = new URL(req.url ?? '/api/news', 'http://localhost')
-          const genreIds = parseGenreQuery(url.searchParams.get('genres'))
+          const fromG = url.searchParams.getAll('g')
+          const genreIds =
+            fromG.length > 0 ? fromG : parseGenreQuery(url.searchParams.get('genres'))
           const items = await fetchLatestNews(genreIds)
           const body: NewsApiResponse = {
             updatedAt: new Date().toISOString(),

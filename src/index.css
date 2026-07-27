@@ -718,6 +718,11 @@ button {
   transition: background 160ms ease, border-color 160ms ease;
 }
 
+.genre-search-item.is-custom {
+  border-color: rgba(46, 230, 166, 0.35);
+  background: rgba(46, 230, 166, 0.08);
+}
+
 .genre-search-item:active {
   background: rgba(46, 230, 166, 0.1);
   border-color: rgba(46, 230, 166, 0.35);

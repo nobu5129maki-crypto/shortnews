@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { genres } from '../data/news'
-import type { ContentGenreId, FeedTabId, NewsItem } from '../types'
+import type { FeedTabId, GenreId, NewsItem } from '../types'
+import { resolveGenres } from '../lib/genres'
 import { useActiveSlide } from '../hooks/useActiveSlide'
 import { useLiveNews } from '../hooks/useLiveNews'
 import { formatClock } from '../utils/format'
@@ -14,9 +14,9 @@ import { SwipeHint } from './SwipeHint'
 type DetailFocus = 'overview' | string
 
 type Props = {
-  myGenres: ContentGenreId[]
-  onAddGenre: (id: ContentGenreId) => void
-  onRemoveGenre: (id: ContentGenreId) => void
+  myGenres: GenreId[]
+  onAddGenre: (id: GenreId) => void
+  onRemoveGenre: (id: GenreId) => void
 }
 
 export function Feed({ myGenres, onAddGenre, onRemoveGenre }: Props) {
@@ -33,10 +33,7 @@ export function Feed({ myGenres, onAddGenre, onRemoveGenre }: Props) {
 
   const myGenreSet = useMemo(() => new Set(myGenres), [myGenres])
 
-  const barGenres = useMemo(
-    () => genres.filter((genre) => myGenreSet.has(genre.id)),
-    [myGenreSet],
-  )
+  const barGenres = useMemo(() => resolveGenres(myGenres), [myGenres])
 
   const items = useMemo(() => {
     if (myGenres.length === 0) return []

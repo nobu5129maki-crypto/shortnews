@@ -1,14 +1,14 @@
 import { useEffect } from 'react'
-import { genres } from '../data/news'
-import type { ContentGenreId } from '../types'
+import { resolveGenres } from '../lib/genres'
+import type { GenreId } from '../types'
 import { GenreSearch } from './GenreSearch'
 
 type Props = {
   open: boolean
-  selected: ContentGenreId[]
+  selected: GenreId[]
   onClose: () => void
-  onAdd: (id: ContentGenreId) => void
-  onRemove: (id: ContentGenreId) => void
+  onAdd: (id: GenreId) => void
+  onRemove: (id: GenreId) => void
 }
 
 export function GenreEditor({
@@ -29,7 +29,7 @@ export function GenreEditor({
 
   if (!open) return null
 
-  const mine = genres.filter((genre) => selected.includes(genre.id))
+  const mine = resolveGenres(selected)
 
   return (
     <div className="editor-overlay" role="dialog" aria-modal="true" aria-labelledby="editor-title">

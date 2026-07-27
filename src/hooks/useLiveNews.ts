@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { newsItems as fallbackNews } from '../data/news'
-import type { ContentGenreId, NewsApiResponse, NewsItem } from '../types'
+import type { GenreId, NewsApiResponse, NewsItem } from '../types'
 
 const REFRESH_MS = 3 * 60 * 1000
 
@@ -14,7 +14,7 @@ type LiveNewsState = {
   refresh: () => Promise<void>
 }
 
-export function useLiveNews(myGenres: ContentGenreId[]): LiveNewsState {
+export function useLiveNews(myGenres: GenreId[]): LiveNewsState {
   const [items, setItems] = useState<NewsItem[]>([])
   const [updatedAt, setUpdatedAt] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
@@ -23,10 +23,11 @@ export function useLiveNews(myGenres: ContentGenreId[]): LiveNewsState {
   const [source, setSource] = useState<'live' | 'fallback'>('fallback')
   const inFlight = useRef(false)
   const hasLive = useRef(false)
-  const genresKey = myGenres.slice().sort().join(',')
+  const genresKey = myGenres.slice().sort().join('\n')
 
   const refresh = useCallback(async () => {
-    if (myGenres.length === 0) {
+    const selected = genresKey ? genresKey.split('\n').filter(Boolean) : []
+    if (selected.length === 0) {
       setItems([])
       setUpdatedAt(null)
       setLoading(false)
@@ -40,10 +41,8 @@ export function useLiveNews(myGenres: ContentGenreId[]): LiveNewsState {
     inFlight.current = true
     setRefreshing(true)
     try {
-      const params = new URLSearchParams({
-        t: String(Date.now()),
-        genres: genresKey,
-      })
+      const params = new URLSearchParams({ t: String(Date.now()) })
+      for (const genre of selected) params.append('g', genre)
       const response = await fetch(`/api/news?${params}`, {
         headers: { Accept: 'application/json' },
       })
@@ -60,7 +59,6 @@ export function useLiveNews(myGenres: ContentGenreId[]): LiveNewsState {
       console.error(err)
       setError('最新ニュースを取得できませんでした。再試行できます。')
       if (!hasLive.current) {
-        const selected = genresKey.split(',').filter(Boolean) as ContentGenreId[]
         const fallback = fallbackNews.filter((item) => selected.includes(item.genre))
         setItems(fallback)
         setSource('fallback')

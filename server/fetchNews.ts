@@ -1,14 +1,19 @@
 import type {
-  ContentGenreId,
+  BuiltinGenreId,
+  GenreId,
   NewsApiResponse,
   NewsItem,
   RelatedTopic,
+} from '../src/types.ts'
+import {
+  isSearchGenre,
+  labelFromGenreId,
 } from '../src/types.ts'
 
 export type { NewsApiResponse }
 
 type FeedSource = {
-  genre: ContentGenreId
+  genre: GenreId
   url: string
   label: string
   limit?: number
@@ -227,7 +232,7 @@ const VIDEOS = [
   'https://cdn.coverr.co/videos/coverr-artificial-intelligence-robot-5084/720p.mp4',
 ]
 
-const POSTERS: Record<ContentGenreId, string[]> = {
+const POSTERS: Record<BuiltinGenreId, string[]> = {
   politics: [
     'https://images.unsplash.com/photo-1529107386315-e1a2ed48a620?w=800&q=80',
     'https://images.unsplash.com/photo-1497366216548-37526070297c?w=800&q=80',
@@ -261,6 +266,12 @@ const POSTERS: Record<ContentGenreId, string[]> = {
     'https://images.unsplash.com/photo-1449824913935-59a10b8d2000?w=800&q=80',
   ],
 }
+
+const DEFAULT_POSTERS = [
+  'https://images.unsplash.com/photo-1504711434969-e33886168f5c?w=800&q=80',
+  'https://images.unsplash.com/photo-1495020689067-958852a7765e?w=800&q=80',
+  'https://images.unsplash.com/photo-1585829365295-ab7cd400c167?w=800&q=80',
+]
 
 const AI_PATTERN =
   /AI|ＡＩ|人工知能|生成AI|ChatGPT|GPT|機械学習|LLM|オンデバイス|大規模言語|ディープラーニング|チャットボ[ッッ]ト|生成系/i
@@ -418,11 +429,11 @@ function buildRelated(title: string, description: string): RelatedTopic[] {
 }
 
 function resolveGenre(
-  assigned: ContentGenreId,
+  assigned: GenreId,
   title: string,
   description: string,
-): ContentGenreId {
-  if (assigned === 'ai') return 'ai'
+): GenreId {
+  if (assigned === 'ai' || isSearchGenre(assigned)) return assigned
   if (AI_PATTERN.test(`${title} ${description}`)) {
     if (assigned === 'tech' || assigned === 'science' || assigned === 'business') {
       return 'ai'
@@ -431,9 +442,14 @@ function resolveGenre(
   return assigned
 }
 
+function postersFor(genre: GenreId): string[] {
+  if (genre in POSTERS) return POSTERS[genre as BuiltinGenreId]
+  return DEFAULT_POSTERS
+}
+
 function toNewsItem(
   item: RssItem,
-  genre: ContentGenreId,
+  genre: GenreId,
   sourceLabel: string,
 ): NewsItem {
   const seed = hashId(item.link || item.title)
@@ -453,7 +469,7 @@ function toNewsItem(
     publishedAt: toIso(item.pubDate),
     url: item.link || undefined,
     videoUrl: pick(VIDEOS, seed),
-    posterUrl: pick(POSTERS[resolvedGenre], seed),
+    posterUrl: pick(postersFor(resolvedGenre), seed),
     likes: 200 + (seed % 8000),
     comments: 20 + (seed % 500),
   }
@@ -504,7 +520,7 @@ function balanceByGenre(
   perGenre = 14,
   total = 120,
 ): NewsItem[] {
-  const groups = new Map<ContentGenreId, NewsItem[]>()
+  const groups = new Map<GenreId, NewsItem[]>()
   for (const item of items) {
     const list = groups.get(item.genre) ?? []
     list.push(item)
@@ -526,6 +542,21 @@ function balanceByGenre(
         new Date(b.publishedAt).getTime() - new Date(a.publishedAt).getTime(),
     )
     .slice(0, total)
+}
+
+function feedsForGenre(id: GenreId): FeedSource[] {
+  if (isSearchGenre(id)) {
+    const query = labelFromGenreId(id)
+    return [
+      {
+        genre: id,
+        url: `https://news.google.com/rss/search?q=${encodeURIComponent(query)}&hl=ja&gl=JP&ceid=JP:ja`,
+        label: `Google ニュース · ${query}`,
+        limit: 12,
+      },
+    ]
+  }
+  return FEEDS.filter((feed) => feed.genre === id)
 }
 
 async function mapSettled<T, R>(
@@ -558,13 +589,13 @@ async function mapSettled<T, R>(
 }
 
 export async function fetchLatestNews(
-  genreIds?: ContentGenreId[],
+  genreIds?: GenreId[],
 ): Promise<NewsItem[]> {
   if (genreIds && genreIds.length === 0) return []
 
   const feeds =
     genreIds && genreIds.length > 0
-      ? FEEDS.filter((feed) => genreIds.includes(feed.genre))
+      ? genreIds.flatMap((id) => feedsForGenre(id))
       : FEEDS
 
   if (feeds.length === 0) return []
@@ -595,12 +626,11 @@ export async function fetchLatestNews(
   return balanceByGenre(dedupe(filtered))
 }
 
-export function parseGenreQuery(value: string | null): ContentGenreId[] | undefined {
+export function parseGenreQuery(value: string | null): GenreId[] | undefined {
   if (value === null) return undefined
   if (value.trim() === '') return []
-  const valid = new Set(FEEDS.map((feed) => feed.genre))
   return value
     .split(',')
     .map((part) => part.trim())
-    .filter((part): part is ContentGenreId => valid.has(part as ContentGenreId))
+    .filter((part) => part.length > 0)
 }

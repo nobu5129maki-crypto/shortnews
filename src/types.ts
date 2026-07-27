@@ -1,4 +1,4 @@
-export type ContentGenreId =
+export type BuiltinGenreId =
   | 'politics'
   | 'business'
   | 'tech'
@@ -9,12 +9,15 @@ export type ContentGenreId =
   | 'science'
   | 'life'
 
-export type FeedTabId = 'mine' | ContentGenreId
+/** Built-in or free-form search genre id (`search:...`) */
+export type GenreId = string
+
+export type FeedTabId = 'mine' | GenreId
 
 export type Genre = {
-  id: ContentGenreId
+  id: GenreId
   label: string
-  blurb: string
+  blurb?: string
 }
 
 export type RelatedTopic = {
@@ -25,7 +28,7 @@ export type RelatedTopic = {
 
 export type NewsItem = {
   id: string
-  genre: ContentGenreId
+  genre: GenreId
   title: string
   summary: string
   detail: string
@@ -45,4 +48,23 @@ export type NewsApiResponse = {
   updatedAt: string
   items: NewsItem[]
   source: 'live' | 'fallback'
+}
+
+export const SEARCH_PREFIX = 'search:'
+
+export function isSearchGenre(id: GenreId): boolean {
+  return id.startsWith(SEARCH_PREFIX)
+}
+
+export function toSearchGenreId(label: string): GenreId {
+  return `${SEARCH_PREFIX}${encodeURIComponent(label.trim())}`
+}
+
+export function labelFromGenreId(id: GenreId): string {
+  if (!isSearchGenre(id)) return id
+  try {
+    return decodeURIComponent(id.slice(SEARCH_PREFIX.length))
+  } catch {
+    return id.slice(SEARCH_PREFIX.length)
+  }
 }
