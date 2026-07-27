@@ -643,13 +643,6 @@ button {
   }
 }
 
-.genre-bar-empty {
-  margin: 10px 0 0;
-  font-size: 0.78rem;
-  font-weight: 600;
-  color: rgba(255, 255, 255, 0.45);
-}
-
 .empty-state {
   height: 100%;
   display: grid;
@@ -664,20 +657,6 @@ button {
   align-content: start;
   padding: 28px 18px 40px;
   text-align: left;
-}
-
-.empty-title {
-  margin: 0;
-  font-size: 1.25rem;
-  font-weight: 700;
-  color: #fff;
-}
-
-.empty-lead {
-  margin: 8px 0 18px;
-  font-size: 0.9rem;
-  line-height: 1.55;
-  color: var(--fog-dim);
 }
 
 .genre-search {

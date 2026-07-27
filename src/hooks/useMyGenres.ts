@@ -2,8 +2,8 @@ import { useCallback, useEffect, useState } from 'react'
 import type { ContentGenreId } from '../types'
 import { genres } from '../data/news'
 
-const GENRES_KEY = 'brief.myGenres'
-const SETUP_KEY = 'brief.setupDone'
+const GENRES_KEY = 'brief.myGenres.v2'
+const SETUP_KEY = 'brief.setupDone.v2'
 
 const validIds = new Set(genres.map((genre) => genre.id))
 

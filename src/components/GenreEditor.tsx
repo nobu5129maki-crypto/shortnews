@@ -39,7 +39,6 @@ export function GenreEditor({
         <header className="editor-header">
           <div>
             <h2 id="editor-title">マイジャンル</h2>
-            <p>検索して追加。不要なものは削除できます</p>
           </div>
           <button type="button" className="editor-close" onClick={onClose} aria-label="閉じる">
             ×
@@ -47,9 +46,7 @@ export function GenreEditor({
         </header>
 
         <section className="editor-mine" aria-label="登録中のジャンル">
-          {mine.length === 0 ? (
-            <p className="editor-mine-empty">まだジャンルがありません。下で検索して追加してください。</p>
-          ) : (
+          {mine.length === 0 ? null : (
             <ul className="editor-mine-list">
               {mine.map((genre) => (
                 <li key={genre.id}>

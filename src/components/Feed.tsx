@@ -169,30 +169,26 @@ export function Feed({ myGenres, onAddGenre, onRemoveGenre }: Props) {
           </span>
         </div>
 
-        {barGenres.length > 0 ? (
+        {barGenres.length > 0 && (
           <GenreBar genres={barGenres} active={tab} onChange={onTabChange} />
-        ) : (
-          <p className="genre-bar-empty">検索してマイジャンルを追加してください</p>
         )}
       </header>
 
       <div ref={feedRef} className="feed" aria-label="マイニュースフィード">
         {myGenres.length === 0 ? (
           <div className="empty-state empty-state-search">
-            <h2 className="empty-title">マイジャンルは空です</h2>
-            <p className="empty-lead">興味のあるジャンルを検索して追加すると、そのRSSが流れます。</p>
             <GenreSearch myGenres={myGenres} onAdd={onAddGenre} autofocus />
           </div>
         ) : items.length === 0 ? (
           <div className="empty-state">
             <p>
               {loading
-                ? '選択したジャンルのニュースを取得中です'
+                ? 'ニュースを取得中です'
                 : 'このジャンルのニュースはまだありません'}
             </p>
             {!loading && (
               <button type="button" className="empty-cta" onClick={() => setEditorOpen(true)}>
-                ジャンルを追加
+                設定
               </button>
             )}
           </div>
