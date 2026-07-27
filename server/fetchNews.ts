@@ -14,7 +14,72 @@ type FeedSource = {
   url: string
   label: string
   limit?: number
+  /** 任意ジャンル用: タイトル/本文に含まれる語で絞り込む */
+  query?: string
 }
+
+/** 任意ジャンル向け: Bing の site: 検索で横断するメディア */
+const SEARCH_SITES: { host: string; label: string }[] = [
+  { host: 'news.yahoo.co.jp', label: 'Yahoo!ニュース' },
+  { host: 'www.asahi.com', label: '朝日新聞' },
+  { host: 'mainichi.jp', label: '毎日新聞' },
+  { host: 'www.nikkei.com', label: '日本経済新聞' },
+  { host: 'www.nhk.or.jp', label: 'NHK' },
+  { host: 'www.nikkansports.com', label: '日刊スポーツ' },
+  { host: 'www.sponichi.co.jp', label: 'スポニチ' },
+  { host: 'www.tokyo-sports.co.jp', label: '東スポ' },
+  { host: 'www.daily.co.jp', label: 'デイリースポーツ' },
+  { host: 'number.bunshun.jp', label: 'Number Web' },
+  { host: 'www.oricon.co.jp', label: 'ORICON NEWS' },
+  { host: 'www.itmedia.co.jp', label: 'ITmedia' },
+  { host: 'gigazine.net', label: 'GIGAZINE' },
+  { host: 'toyokeizai.net', label: '東洋経済オンライン' },
+  { host: 'www.bbc.com', label: 'BBC' },
+]
+
+/** 任意ジャンル向け: 直接RSSをキーワードで横断 */
+const SEARCH_MEDIA: Omit<FeedSource, 'genre' | 'query'>[] = [
+  {
+    url: 'https://www.nhk.or.jp/rss/news/cat0.xml',
+    label: 'NHK NEWS WEB',
+    limit: 24,
+  },
+  {
+    url: 'https://news.livedoor.com/topics/rss/top.xml',
+    label: 'ライブドアニュース',
+    limit: 24,
+  },
+  {
+    url: 'https://feeds.bbci.co.uk/japanese/rss.xml',
+    label: 'BBC News 日本語',
+    limit: 24,
+  },
+  {
+    url: 'https://news.yahoo.co.jp/rss/categories/sports.xml',
+    label: 'Yahoo!ニュース スポーツ',
+    limit: 24,
+  },
+  {
+    url: 'https://news.yahoo.co.jp/rss/categories/domestic.xml',
+    label: 'Yahoo!ニュース 国内',
+    limit: 24,
+  },
+  {
+    url: 'https://www.asahi.com/rss/asahi/newsheadlines.rdf',
+    label: '朝日新聞',
+    limit: 20,
+  },
+  {
+    url: 'https://mainichi.jp/rss/etc/mainichi-flash.rss',
+    label: '毎日新聞',
+    limit: 20,
+  },
+  {
+    url: 'https://rss.itmedia.co.jp/rss/2.0/news_bursts.xml',
+    label: 'ITmedia NEWS',
+    limit: 20,
+  },
+]
 
 /** ジャンル別の専門メディア + NHK（補完） */
 const FEEDS: FeedSource[] = [
@@ -278,6 +343,7 @@ type RssItem = {
   link: string
   description: string
   pubDate: string
+  publisher?: string
 }
 
 function decodeXml(value: string): string {
@@ -349,15 +415,98 @@ function parseFeed(xml: string): RssItem[] {
     const title =
       tagValue(block, 'title') || tagValue(block, 'dc:title')
     const description = descriptionValue(block) || title
+    const publisher =
+      tagValue(block, 'source') ||
+      tagValue(block, 'dc:publisher') ||
+      tagValue(block, 'author') ||
+      undefined
     return {
       title,
-      link: linkValue(block, attrs),
+      link: unwrapArticleUrl(linkValue(block, attrs)),
       description,
       pubDate: dateValue(block),
+      publisher: publisher || publisherFromTitle(title) || undefined,
     }
   })
 
   return parsed.filter((item) => item.title)
+}
+
+function unwrapArticleUrl(link: string): string {
+  if (!link) return link
+  try {
+    const url = new URL(link)
+    const nested =
+      url.searchParams.get('url') ||
+      url.searchParams.get('u') ||
+      url.searchParams.get('RU')
+    if (nested) {
+      try {
+        return decodeURIComponent(nested)
+      } catch {
+        return nested
+      }
+    }
+  } catch {
+    /* keep original */
+  }
+  return link
+}
+
+function publisherFromTitle(title: string): string | null {
+  const dash = title.match(/\s[-–—]\s([^-–—（(]{2,40})$/)
+  if (dash) return dash[1].trim()
+
+  const paren = title.match(/[（(]([^）)]{2,40})[）)](?:\s*[-–—].*)?$/)
+  if (paren) return paren[1].trim()
+
+  return null
+}
+
+function resolveSourceLabel(
+  fallback: string,
+  item: RssItem,
+): string {
+  // site: 指定フィードはメディア名をそのまま使う
+  if (!fallback.includes('·')) return fallback
+  if (item.publisher?.trim()) return item.publisher.trim()
+
+  const hostLabel = publisherFromUrl(item.link)
+  if (hostLabel) return hostLabel
+  return fallback
+}
+
+function publisherFromUrl(link: string): string | null {
+  if (!link) return null
+  try {
+    const host = new URL(link).hostname.replace(/^www\./, '')
+    const known: Record<string, string> = {
+      'news.yahoo.co.jp': 'Yahoo!ニュース',
+      'yahoo.co.jp': 'Yahoo!ニュース',
+      'asahi.com': '朝日新聞',
+      'mainichi.jp': '毎日新聞',
+      'nikkei.com': '日本経済新聞',
+      'nhk.or.jp': 'NHK',
+      'nikkansports.com': '日刊スポーツ',
+      'sponichi.co.jp': 'スポニチ',
+      'tokyo-sports.co.jp': '東スポ',
+      'daily.co.jp': 'デイリースポーツ',
+      'oricon.co.jp': 'ORICON NEWS',
+      'itmedia.co.jp': 'ITmedia',
+      'gigazine.net': 'GIGAZINE',
+      'toyokeizai.net': '東洋経済オンライン',
+      'bbc.com': 'BBC',
+      'bbci.co.uk': 'BBC',
+      'livedoor.com': 'ライブドアニュース',
+      'msn.com': 'MSN',
+    }
+    for (const [domain, label] of Object.entries(known)) {
+      if (host === domain || host.endsWith(`.${domain}`)) return label
+    }
+  } catch {
+    return null
+  }
+  return null
 }
 
 function hashId(input: string): number {
@@ -462,7 +611,7 @@ function toNewsItem(
     detail: `${description}\n\nAIが見出しと本文から要点を整理しました。より深い角度は関連ボタンから確認できます。`,
     keyPoints: buildKeyPoints(item.title, description),
     related: buildRelated(item.title, description),
-    source: sourceLabel,
+    source: resolveSourceLabel(sourceLabel, item),
     publishedAt: toIso(item.pubDate),
     url: item.link || undefined,
     videoUrl: pick(VIDEOS, seed),
@@ -487,17 +636,37 @@ async function fetchFeed(source: FeedSource): Promise<NewsItem[]> {
   const items = parseFeed(xml)
   const limit = source.limit ?? 10
 
+  let filtered = items
+
   // AI枠の汎用フィードはAI関連のみ残す
-  const filtered =
-    source.genre === 'ai' && !source.url.includes('aiplus')
-      ? items.filter((item) =>
-          AI_PATTERN.test(`${item.title} ${item.description}`),
-        )
-      : items
+  if (source.genre === 'ai' && !source.url.includes('aiplus')) {
+    filtered = filtered.filter((item) =>
+      AI_PATTERN.test(`${item.title} ${item.description}`),
+    )
+  }
+
+  if (source.query) {
+    filtered = filtered.filter((item) => matchesQuery(item, source.query!))
+  }
 
   return filtered
     .slice(0, limit)
     .map((item) => toNewsItem(item, source.genre, source.label))
+}
+
+function matchesQuery(item: RssItem, query: string): boolean {
+  const haystack = `${item.title}\n${item.description}`
+  const normalized = query.trim()
+  if (!normalized) return true
+  if (haystack.includes(normalized)) return true
+
+  const tokens = normalized
+    .split(/[\s　・/｜|]+/)
+    .map((token) => token.trim())
+    .filter((token) => token.length >= 2)
+
+  if (tokens.length <= 1) return false
+  return tokens.every((token) => haystack.includes(token))
 }
 
 function dedupe(items: NewsItem[]): NewsItem[] {
@@ -524,13 +693,19 @@ function balanceByGenre(
     groups.set(item.genre, list)
   }
 
+  const genreCount = Math.max(groups.size, 1)
+  const dynamicPerGenre =
+    genreCount <= 2 ? Math.max(perGenre, 48) : perGenre
+  const dynamicTotal =
+    genreCount <= 2 ? Math.max(total, 80) : total
+
   const picked: NewsItem[] = []
   for (const list of groups.values()) {
     list.sort(
       (a, b) =>
         new Date(b.publishedAt).getTime() - new Date(a.publishedAt).getTime(),
     )
-    picked.push(...list.slice(0, perGenre))
+    picked.push(...list.slice(0, dynamicPerGenre))
   }
 
   return picked
@@ -538,19 +713,38 @@ function balanceByGenre(
       (a, b) =>
         new Date(b.publishedAt).getTime() - new Date(a.publishedAt).getTime(),
     )
-    .slice(0, total)
+    .slice(0, dynamicTotal)
 }
 
 function feedsForGenre(id: GenreId): FeedSource[] {
   if (isSearchGenre(id)) {
     const query = labelFromGenreId(id)
+    const encoded = encodeURIComponent(query)
     return [
       {
         genre: id,
-        url: `https://news.google.com/rss/search?q=${encodeURIComponent(query)}&hl=ja&gl=JP&ceid=JP:ja`,
+        url: `https://news.google.com/rss/search?q=${encoded}&hl=ja&gl=JP&ceid=JP:ja`,
         label: `Google ニュース · ${query}`,
-        limit: 12,
+        limit: 8,
       },
+      {
+        genre: id,
+        url: `https://www.bing.com/news/search?q=${encoded}&format=RSS&mkt=ja-JP`,
+        label: `Bing ニュース · ${query}`,
+        limit: 8,
+      },
+      ...SEARCH_SITES.map((site) => ({
+        genre: id,
+        url: `https://www.bing.com/news/search?q=${encodeURIComponent(`${query} site:${site.host}`)}&format=RSS&mkt=ja-JP`,
+        label: site.label,
+        limit: 6,
+      })),
+      ...SEARCH_MEDIA.map((feed) => ({
+        ...feed,
+        genre: id,
+        query,
+        limit: Math.min(feed.limit ?? 12, 6),
+      })),
     ]
   }
   return FEEDS.filter((feed) => feed.genre === id)
@@ -597,7 +791,7 @@ export async function fetchLatestNews(
 
   if (feeds.length === 0) return []
 
-  const settled = await mapSettled(feeds, 5, (feed) => fetchFeed(feed))
+  const settled = await mapSettled(feeds, 8, (feed) => fetchFeed(feed))
   const collected: NewsItem[] = []
   const failures: string[] = []
 
