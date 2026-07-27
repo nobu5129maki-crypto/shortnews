@@ -1,6 +1,6 @@
 import type { Plugin } from 'vite'
 import { fetchLatestNews, parseGenreQuery } from './server/fetchNews.ts'
-import type { NewsApiResponse } from './src/types.ts'
+import type { NewsApiResponse } from './server/types.ts'
 
 export function newsApiPlugin(): Plugin {
   return {

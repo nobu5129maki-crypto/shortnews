@@ -2,7 +2,7 @@ import {
   fetchLatestNews,
   parseGenreQuery,
 } from '../server/fetchNews.js'
-import type { NewsApiResponse } from '../src/types.js'
+import type { NewsApiResponse } from '../server/types.js'
 
 export const config = {
   runtime: 'edge',

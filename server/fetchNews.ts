@@ -4,11 +4,8 @@ import type {
   NewsApiResponse,
   NewsItem,
   RelatedTopic,
-} from '../src/types.ts'
-import {
-  isSearchGenre,
-  labelFromGenreId,
-} from '../src/types.ts'
+} from './types.ts'
+import { isSearchGenre, labelFromGenreId } from './types.ts'
 
 export type { NewsApiResponse }
 
