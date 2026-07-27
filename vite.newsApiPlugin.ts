@@ -1,14 +1,16 @@
 import type { Plugin } from 'vite'
-import { fetchLatestNews } from './server/fetchNews.ts'
+import { fetchLatestNews, parseGenreQuery } from './server/fetchNews.ts'
 import type { NewsApiResponse } from './src/types.ts'
 
 export function newsApiPlugin(): Plugin {
   return {
     name: 'brief-news-api',
     configureServer(server) {
-      server.middlewares.use('/api/news', async (_req, res) => {
+      server.middlewares.use('/api/news', async (req, res) => {
         try {
-          const items = await fetchLatestNews()
+          const url = new URL(req.url ?? '/api/news', 'http://localhost')
+          const genreIds = parseGenreQuery(url.searchParams.get('genres'))
+          const items = await fetchLatestNews(genreIds)
           const body: NewsApiResponse = {
             updatedAt: new Date().toISOString(),
             items,

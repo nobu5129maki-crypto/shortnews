@@ -557,8 +557,19 @@ async function mapSettled<T, R>(
   return results
 }
 
-export async function fetchLatestNews(): Promise<NewsItem[]> {
-  const settled = await mapSettled(FEEDS, 5, (feed) => fetchFeed(feed))
+export async function fetchLatestNews(
+  genreIds?: ContentGenreId[],
+): Promise<NewsItem[]> {
+  if (genreIds && genreIds.length === 0) return []
+
+  const feeds =
+    genreIds && genreIds.length > 0
+      ? FEEDS.filter((feed) => genreIds.includes(feed.genre))
+      : FEEDS
+
+  if (feeds.length === 0) return []
+
+  const settled = await mapSettled(feeds, 5, (feed) => fetchFeed(feed))
   const collected: NewsItem[] = []
   const failures: string[] = []
 
@@ -567,8 +578,8 @@ export async function fetchLatestNews(): Promise<NewsItem[]> {
     if (result.status === 'fulfilled') {
       collected.push(...result.value)
     } else {
-      failures.push(`${FEEDS[i].label}(${FEEDS[i].genre})`)
-      console.warn('[news]', FEEDS[i].label, result.reason)
+      failures.push(`${feeds[i].label}(${feeds[i].genre})`)
+      console.warn('[news]', feeds[i].label, result.reason)
     }
   }
 
@@ -576,5 +587,20 @@ export async function fetchLatestNews(): Promise<NewsItem[]> {
     console.warn('[news] failed feeds:', failures.join(', '))
   }
 
-  return balanceByGenre(dedupe(collected))
+  const filtered =
+    genreIds && genreIds.length > 0
+      ? collected.filter((item) => genreIds.includes(item.genre))
+      : collected
+
+  return balanceByGenre(dedupe(filtered))
+}
+
+export function parseGenreQuery(value: string | null): ContentGenreId[] | undefined {
+  if (value === null) return undefined
+  if (value.trim() === '') return []
+  const valid = new Set(FEEDS.map((feed) => feed.genre))
+  return value
+    .split(',')
+    .map((part) => part.trim())
+    .filter((part): part is ContentGenreId => valid.has(part as ContentGenreId))
 }

@@ -1,22 +1,23 @@
-import { useEffect, useState } from 'react'
+import { useEffect } from 'react'
 import { genres } from '../data/news'
 import type { ContentGenreId } from '../types'
-import { GenrePicker } from './GenrePicker'
+import { GenreSearch } from './GenreSearch'
 
 type Props = {
   open: boolean
   selected: ContentGenreId[]
   onClose: () => void
-  onSave: (selected: ContentGenreId[]) => boolean
+  onAdd: (id: ContentGenreId) => void
+  onRemove: (id: ContentGenreId) => void
 }
 
-export function GenreEditor({ open, selected, onClose, onSave }: Props) {
-  const [draft, setDraft] = useState<ContentGenreId[]>(selected)
-
-  useEffect(() => {
-    if (open) setDraft(selected)
-  }, [open, selected])
-
+export function GenreEditor({
+  open,
+  selected,
+  onClose,
+  onAdd,
+  onRemove,
+}: Props) {
   useEffect(() => {
     if (!open) return
     const onKey = (event: KeyboardEvent) => {
@@ -28,19 +29,7 @@ export function GenreEditor({ open, selected, onClose, onSave }: Props) {
 
   if (!open) return null
 
-  const toggle = (id: ContentGenreId) => {
-    setDraft((prev) => {
-      if (prev.includes(id)) {
-        if (prev.length === 1) return prev
-        return prev.filter((item) => item !== id)
-      }
-      return [...prev, id]
-    })
-  }
-
-  const save = () => {
-    if (onSave(draft)) onClose()
-  }
+  const mine = genres.filter((genre) => selected.includes(genre.id))
 
   return (
     <div className="editor-overlay" role="dialog" aria-modal="true" aria-labelledby="editor-title">
@@ -50,26 +39,40 @@ export function GenreEditor({ open, selected, onClose, onSave }: Props) {
         <header className="editor-header">
           <div>
             <h2 id="editor-title">マイジャンル</h2>
-            <p>追加・削除してフィードをカスタム</p>
+            <p>検索して追加。不要なものは削除できます</p>
           </div>
           <button type="button" className="editor-close" onClick={onClose} aria-label="閉じる">
             ×
           </button>
         </header>
 
-        <GenrePicker catalog={genres} selected={draft} onToggle={toggle} />
+        <section className="editor-mine" aria-label="登録中のジャンル">
+          {mine.length === 0 ? (
+            <p className="editor-mine-empty">まだジャンルがありません。下で検索して追加してください。</p>
+          ) : (
+            <ul className="editor-mine-list">
+              {mine.map((genre) => (
+                <li key={genre.id}>
+                  <span>{genre.label}</span>
+                  <button
+                    type="button"
+                    className="editor-remove"
+                    onClick={() => onRemove(genre.id)}
+                    aria-label={`${genre.label}を削除`}
+                  >
+                    削除
+                  </button>
+                </li>
+              ))}
+            </ul>
+          )}
+        </section>
+
+        <GenreSearch myGenres={selected} onAdd={onAdd} autofocus />
 
         <div className="editor-actions">
-          <button type="button" className="editor-cancel" onClick={onClose}>
-            キャンセル
-          </button>
-          <button
-            type="button"
-            className="setup-cta"
-            disabled={draft.length === 0}
-            onClick={save}
-          >
-            保存する
+          <button type="button" className="setup-cta" onClick={onClose}>
+            閉じる
           </button>
         </div>
       </div>

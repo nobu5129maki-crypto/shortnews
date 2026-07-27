@@ -1,13 +1,18 @@
-import { fetchLatestNews } from '../server/fetchNews.js'
+import {
+  fetchLatestNews,
+  parseGenreQuery,
+} from '../server/fetchNews.js'
 import type { NewsApiResponse } from '../src/types.js'
 
 export const config = {
   runtime: 'edge',
 }
 
-export default async function handler(): Promise<Response> {
+export default async function handler(request: Request): Promise<Response> {
   try {
-    const items = await fetchLatestNews()
+    const url = new URL(request.url)
+    const genreIds = parseGenreQuery(url.searchParams.get('genres'))
+    const items = await fetchLatestNews(genreIds)
     const body: NewsApiResponse = {
       updatedAt: new Date().toISOString(),
       items,

@@ -7,6 +7,7 @@ import { formatClock } from '../utils/format'
 import { DetailPanel } from './DetailPanel'
 import { GenreBar } from './GenreBar'
 import { GenreEditor } from './GenreEditor'
+import { GenreSearch } from './GenreSearch'
 import { NewsSlide } from './NewsSlide'
 import { SwipeHint } from './SwipeHint'
 
@@ -14,10 +15,11 @@ type DetailFocus = 'overview' | string
 
 type Props = {
   myGenres: ContentGenreId[]
-  onReplaceGenres: (selected: ContentGenreId[]) => boolean
+  onAddGenre: (id: ContentGenreId) => void
+  onRemoveGenre: (id: ContentGenreId) => void
 }
 
-export function Feed({ myGenres, onReplaceGenres }: Props) {
+export function Feed({ myGenres, onAddGenre, onRemoveGenre }: Props) {
   const feedRef = useRef<HTMLDivElement>(null)
   const [tab, setTab] = useState<FeedTabId>('mine')
   const [liked, setLiked] = useState<Record<string, boolean>>({})
@@ -27,7 +29,7 @@ export function Feed({ myGenres, onReplaceGenres }: Props) {
   const [detailItem, setDetailItem] = useState<NewsItem | null>(null)
   const [detailFocus, setDetailFocus] = useState<DetailFocus>('overview')
   const { items: liveItems, updatedAt, loading, refreshing, error, source, refresh } =
-    useLiveNews()
+    useLiveNews(myGenres)
 
   const myGenreSet = useMemo(() => new Set(myGenres), [myGenres])
 
@@ -37,11 +39,12 @@ export function Feed({ myGenres, onReplaceGenres }: Props) {
   )
 
   const items = useMemo(() => {
+    if (myGenres.length === 0) return []
     if (tab === 'mine') {
       return liveItems.filter((item) => myGenreSet.has(item.genre))
     }
     return liveItems.filter((item) => item.genre === tab)
-  }, [tab, myGenreSet, liveItems])
+  }, [tab, myGenreSet, liveItems, myGenres.length])
 
   const activeIndex = useActiveSlide(feedRef, items.length)
   const detailOpen = detailItem !== null
@@ -136,7 +139,7 @@ export function Feed({ myGenres, onReplaceGenres }: Props) {
                 type="button"
                 className={`refresh-btn${refreshing ? ' is-busy' : ''}`}
                 onClick={() => void refresh()}
-                disabled={refreshing}
+                disabled={refreshing || myGenres.length === 0}
                 aria-label="ニュースを更新"
               >
                 {refreshing ? '更新中' : '更新'}
@@ -151,8 +154,9 @@ export function Feed({ myGenres, onReplaceGenres }: Props) {
               </button>
             </div>
             <p className="update-status" aria-live="polite">
-              {loading && !updatedAt && '取得中…'}
-              {!loading && updatedAt && `更新 ${formatClock(updatedAt)}`}
+              {myGenres.length === 0 && 'ジャンル未設定'}
+              {myGenres.length > 0 && loading && !updatedAt && '取得中…'}
+              {myGenres.length > 0 && !loading && updatedAt && `更新 ${formatClock(updatedAt)}`}
               {error && <span className="update-error">更新失敗</span>}
             </p>
           </div>
@@ -161,24 +165,34 @@ export function Feed({ myGenres, onReplaceGenres }: Props) {
         <div className="chrome-meta">
           <span className="live-pill" aria-label="最新">
             <span className="live-dot" />
-            {source === 'live' ? 'LIVE' : 'DEMO'}
+            {myGenres.length === 0 ? 'READY' : source === 'live' ? 'LIVE' : 'DEMO'}
           </span>
         </div>
 
-        <GenreBar genres={barGenres} active={tab} onChange={onTabChange} />
+        {barGenres.length > 0 ? (
+          <GenreBar genres={barGenres} active={tab} onChange={onTabChange} />
+        ) : (
+          <p className="genre-bar-empty">検索してマイジャンルを追加してください</p>
+        )}
       </header>
 
       <div ref={feedRef} className="feed" aria-label="マイニュースフィード">
-        {items.length === 0 ? (
+        {myGenres.length === 0 ? (
+          <div className="empty-state empty-state-search">
+            <h2 className="empty-title">マイジャンルは空です</h2>
+            <p className="empty-lead">興味のあるジャンルを検索して追加すると、そのRSSが流れます。</p>
+            <GenreSearch myGenres={myGenres} onAdd={onAddGenre} autofocus />
+          </div>
+        ) : items.length === 0 ? (
           <div className="empty-state">
             <p>
               {loading
-                ? 'ニュースを読み込み中です'
-                : '選択中のジャンルにニュースがありません'}
+                ? '選択したジャンルのニュースを取得中です'
+                : 'このジャンルのニュースはまだありません'}
             </p>
             {!loading && (
               <button type="button" className="empty-cta" onClick={() => setEditorOpen(true)}>
-                ジャンルを編集
+                ジャンルを追加
               </button>
             )}
           </div>
@@ -204,13 +218,16 @@ export function Feed({ myGenres, onReplaceGenres }: Props) {
         )}
       </div>
 
-      <SwipeHint visible={showHint && items.length > 1 && !editorOpen && !detailOpen} />
+      <SwipeHint
+        visible={showHint && items.length > 1 && !editorOpen && !detailOpen}
+      />
 
       <GenreEditor
         open={editorOpen}
         selected={myGenres}
         onClose={() => setEditorOpen(false)}
-        onSave={onReplaceGenres}
+        onAdd={onAddGenre}
+        onRemove={onRemoveGenre}
       />
 
       {detailItem && (

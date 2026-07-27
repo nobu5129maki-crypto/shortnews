@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { newsItems as fallbackNews } from '../data/news'
-import type { NewsItem } from '../types'
-import type { NewsApiResponse } from '../types'
+import type { ContentGenreId, NewsApiResponse, NewsItem } from '../types'
 
 const REFRESH_MS = 3 * 60 * 1000
 
@@ -15,8 +14,8 @@ type LiveNewsState = {
   refresh: () => Promise<void>
 }
 
-export function useLiveNews(): LiveNewsState {
-  const [items, setItems] = useState<NewsItem[]>(fallbackNews)
+export function useLiveNews(myGenres: ContentGenreId[]): LiveNewsState {
+  const [items, setItems] = useState<NewsItem[]>([])
   const [updatedAt, setUpdatedAt] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
   const [refreshing, setRefreshing] = useState(false)
@@ -24,20 +23,34 @@ export function useLiveNews(): LiveNewsState {
   const [source, setSource] = useState<'live' | 'fallback'>('fallback')
   const inFlight = useRef(false)
   const hasLive = useRef(false)
+  const genresKey = myGenres.slice().sort().join(',')
 
   const refresh = useCallback(async () => {
+    if (myGenres.length === 0) {
+      setItems([])
+      setUpdatedAt(null)
+      setLoading(false)
+      setRefreshing(false)
+      setError(null)
+      setSource('live')
+      return
+    }
+
     if (inFlight.current) return
     inFlight.current = true
     setRefreshing(true)
     try {
-      const response = await fetch(`/api/news?t=${Date.now()}`, {
+      const params = new URLSearchParams({
+        t: String(Date.now()),
+        genres: genresKey,
+      })
+      const response = await fetch(`/api/news?${params}`, {
         headers: { Accept: 'application/json' },
       })
       if (!response.ok) throw new Error(`HTTP ${response.status}`)
       const data = (await response.json()) as NewsApiResponse
-      if (!Array.isArray(data.items) || data.items.length === 0) {
-        throw new Error('empty news')
-      }
+      if (!Array.isArray(data.items)) throw new Error('invalid news')
+
       setItems(data.items)
       setUpdatedAt(data.updatedAt)
       setSource('live')
@@ -47,7 +60,9 @@ export function useLiveNews(): LiveNewsState {
       console.error(err)
       setError('最新ニュースを取得できませんでした。再試行できます。')
       if (!hasLive.current) {
-        setItems(fallbackNews)
+        const selected = genresKey.split(',').filter(Boolean) as ContentGenreId[]
+        const fallback = fallbackNews.filter((item) => selected.includes(item.genre))
+        setItems(fallback)
         setSource('fallback')
       }
     } finally {
@@ -55,9 +70,11 @@ export function useLiveNews(): LiveNewsState {
       setRefreshing(false)
       inFlight.current = false
     }
-  }, [])
+  }, [genresKey])
 
   useEffect(() => {
+    hasLive.current = false
+    setLoading(true)
     void refresh()
     const timer = window.setInterval(() => {
       void refresh()

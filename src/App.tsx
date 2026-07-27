@@ -1,10 +1,9 @@
 import { Feed } from './components/Feed'
-import { GenreSetup } from './components/GenreSetup'
 import { InstallPrompt } from './components/InstallPrompt'
 import { useMyGenres } from './hooks/useMyGenres'
 
 function App() {
-  const { ready, setupDone, myGenres, completeSetup, replaceGenres } = useMyGenres()
+  const { ready, myGenres, addGenre, removeGenre } = useMyGenres()
 
   if (!ready) {
     return (
@@ -14,18 +13,13 @@ function App() {
     )
   }
 
-  if (!setupDone) {
-    return (
-      <>
-        <GenreSetup onComplete={completeSetup} />
-        <InstallPrompt />
-      </>
-    )
-  }
-
   return (
     <>
-      <Feed myGenres={myGenres} onReplaceGenres={replaceGenres} />
+      <Feed
+        myGenres={myGenres}
+        onAddGenre={addGenre}
+        onRemoveGenre={removeGenre}
+      />
       <InstallPrompt />
     </>
   )
