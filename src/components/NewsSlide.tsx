@@ -4,8 +4,6 @@ import { resolveGenre } from '../lib/genres'
 import { formatRelativeTime } from '../utils/format'
 import { ActionRail } from './ActionRail'
 
-type DetailFocus = 'overview' | string
-
 type Props = {
   item: NewsItem
   index: number
@@ -15,7 +13,7 @@ type Props = {
   detailOpen: boolean
   onLike: () => void
   onSave: () => void
-  onOpenDetail: (focus: DetailFocus) => void
+  onOpenDetail: () => void
 }
 
 export function NewsSlide({
@@ -151,24 +149,14 @@ export function NewsSlide({
         <h2 className="slide-title">{item.title}</h2>
         <p className="slide-summary">{item.summary}</p>
 
-        <div className="related-row" aria-label="関連トピック">
+        <div className="related-row">
           <button
             type="button"
             className="related-btn is-primary"
-            onClick={() => onOpenDetail('overview')}
+            onClick={onOpenDetail}
           >
             詳しく
           </button>
-          {item.related.map((topic) => (
-            <button
-              key={topic.id}
-              type="button"
-              className="related-btn"
-              onClick={() => onOpenDetail(topic.id)}
-            >
-              {topic.label}
-            </button>
-          ))}
         </div>
 
         <p className="slide-source">{item.source}</p>

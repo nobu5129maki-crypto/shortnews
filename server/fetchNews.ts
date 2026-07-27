@@ -3,7 +3,6 @@ import type {
   GenreId,
   NewsApiResponse,
   NewsItem,
-  RelatedTopic,
 } from './types.js'
 import { isSearchGenre, labelFromGenreId } from './types.js'
 
@@ -383,10 +382,10 @@ function linkValue(block: string, attrs = ''): string {
 
 function descriptionValue(block: string): string {
   return (
-    tagValue(block, 'description') ||
-    tagValue(block, 'summary') ||
     tagValue(block, 'content:encoded') ||
     tagValue(block, 'content') ||
+    tagValue(block, 'description') ||
+    tagValue(block, 'summary') ||
     tagValue(block, 'dc:description')
   )
 }
@@ -549,29 +548,27 @@ function buildKeyPoints(title: string, description: string): string[] {
   return [
     title,
     description.slice(0, 48).replace(/。$/, ''),
-    '続報・影響は詳細パネルで確認できます',
+    '詳細はパネルで全文を確認できます',
   ]
 }
 
-function buildRelated(title: string, description: string): RelatedTopic[] {
-  const base = description.slice(0, 120)
-  return [
-    {
-      id: 'bg',
-      label: '背景',
-      detail: `このニュースの背景として、${base}${description.length > 120 ? '…' : ''} 関連する制度・市場・世論の動きが影響しています。`,
-    },
-    {
-      id: 'impact',
-      label: '影響',
-      detail: `「${title}」は、関係者や生活者に今後影響しうるテーマです。短期の反応だけでなく、中長期の変化にも注目が集まっています。`,
-    },
-    {
-      id: 'next',
-      label: '今後の焦点',
-      detail: `今後の焦点は、続報の内容と関係者の対応です。追加発表や数字の更新があれば、このフィードにも自動で反映されます。`,
-    },
-  ]
+function cleanDetailText(value: string): string {
+  return value
+    .replace(/<!\[CDATA\[([\s\S]*?)\]\]>/g, '$1')
+    .replace(/<br\s*\/?>/gi, '\n')
+    .replace(/<\/(?:p|div|li|h[1-6]|tr)>/gi, '\n')
+    .replace(/<[^>]+>/g, '')
+    .replace(/&amp;/g, '&')
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>')
+    .replace(/&quot;/g, '"')
+    .replace(/&#39;/g, "'")
+    .replace(/&nbsp;/g, ' ')
+    .replace(/\r\n?/g, '\n')
+    .replace(/[ \t]+\n/g, '\n')
+    .replace(/\n{3,}/g, '\n\n')
+    .replace(/[ \t]{2,}/g, ' ')
+    .trim()
 }
 
 function resolveGenre(
@@ -599,7 +596,7 @@ function toNewsItem(
   sourceLabel: string,
 ): NewsItem {
   const seed = hashId(item.link || item.title)
-  const description = item.description || item.title
+  const description = cleanDetailText(item.description || item.title)
   const summary = buildSummary(description)
   const resolvedGenre = resolveGenre(genre, item.title, description)
 
@@ -608,9 +605,9 @@ function toNewsItem(
     genre: resolvedGenre,
     title: item.title,
     summary,
-    detail: `${description}\n\nAIが見出しと本文から要点を整理しました。より深い角度は関連ボタンから確認できます。`,
+    detail: description || item.title,
     keyPoints: buildKeyPoints(item.title, description),
-    related: buildRelated(item.title, description),
+    related: [],
     source: resolveSourceLabel(sourceLabel, item),
     publishedAt: toIso(item.pubDate),
     url: item.link || undefined,

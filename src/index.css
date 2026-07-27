@@ -1213,6 +1213,8 @@ button {
   font-size: 0.95rem;
   line-height: 1.7;
   color: rgba(244, 247, 250, 0.9);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
 }
 
 .detail-points {

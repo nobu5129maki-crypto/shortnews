@@ -11,8 +11,6 @@ import { GenreSearch } from './GenreSearch'
 import { NewsSlide } from './NewsSlide'
 import { SwipeHint } from './SwipeHint'
 
-type DetailFocus = 'overview' | string
-
 type Props = {
   myGenres: GenreId[]
   onAddGenre: (id: GenreId) => void
@@ -27,7 +25,6 @@ export function Feed({ myGenres, onAddGenre, onRemoveGenre }: Props) {
   const [showHint, setShowHint] = useState(true)
   const [editorOpen, setEditorOpen] = useState(false)
   const [detailItem, setDetailItem] = useState<NewsItem | null>(null)
-  const [detailFocus, setDetailFocus] = useState<DetailFocus>('overview')
   const { items: liveItems, updatedAt, loading, refreshing, error, source, refresh } =
     useLiveNews(myGenres)
 
@@ -117,9 +114,8 @@ export function Feed({ myGenres, onAddGenre, onRemoveGenre }: Props) {
     setDetailItem(null)
   }
 
-  const openDetail = (item: NewsItem, focus: DetailFocus) => {
+  const openDetail = (item: NewsItem) => {
     setDetailItem(item)
-    setDetailFocus(focus)
   }
 
   return (
@@ -205,7 +201,7 @@ export function Feed({ myGenres, onAddGenre, onRemoveGenre }: Props) {
               onSave={() =>
                 setSaved((prev) => ({ ...prev, [item.id]: !prev[item.id] }))
               }
-              onOpenDetail={(focus) => openDetail(item, focus)}
+              onOpenDetail={() => openDetail(item)}
             />
           ))
         )}
@@ -227,9 +223,7 @@ export function Feed({ myGenres, onAddGenre, onRemoveGenre }: Props) {
         <DetailPanel
           item={detailItem}
           open={detailOpen}
-          focus={detailFocus}
           onClose={() => setDetailItem(null)}
-          onFocusChange={setDetailFocus}
         />
       )}
     </div>
