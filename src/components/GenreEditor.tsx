@@ -45,27 +45,29 @@ export function GenreEditor({
           </button>
         </header>
 
-        <section className="editor-mine" aria-label="登録中のジャンル">
-          {mine.length === 0 ? null : (
-            <ul className="editor-mine-list">
-              {mine.map((genre) => (
-                <li key={genre.id}>
-                  <span>{genre.label}</span>
-                  <button
-                    type="button"
-                    className="editor-remove"
-                    onClick={() => onRemove(genre.id)}
-                    aria-label={`${genre.label}を削除`}
-                  >
-                    削除
-                  </button>
-                </li>
-              ))}
-            </ul>
-          )}
-        </section>
+        <div className="editor-body">
+          <section className="editor-mine" aria-label="登録中のジャンル">
+            {mine.length === 0 ? null : (
+              <ul className="editor-mine-list">
+                {mine.map((genre) => (
+                  <li key={genre.id}>
+                    <span>{genre.label}</span>
+                    <button
+                      type="button"
+                      className="editor-remove"
+                      onClick={() => onRemove(genre.id)}
+                      aria-label={`${genre.label}を削除`}
+                    >
+                      削除
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </section>
 
-        <GenreSearch myGenres={selected} onAdd={onAdd} autofocus />
+          <GenreSearch myGenres={selected} onAdd={onAdd} autofocus />
+        </div>
 
         <div className="editor-actions">
           <button type="button" className="setup-cta" onClick={onClose}>

@@ -70,8 +70,14 @@ export function GenreSearch({
         autoFocus={autofocus}
         placeholder={placeholder}
         autoComplete="off"
+        enterKeyHint="search"
         onChange={(event) => setQuery(event.target.value)}
+        onFocus={(event) => {
+          // Keep the caret visible without letting the snap feed fight the browser.
+          event.currentTarget.scrollIntoView({ block: 'nearest', inline: 'nearest' })
+        }}
         onKeyDown={(event) => {
+          if (event.nativeEvent.isComposing || event.key === 'Process') return
           if (event.key === 'Enter' && q) {
             event.preventDefault()
             add(customOption?.id ?? catalogMatches[0]?.id ?? q)

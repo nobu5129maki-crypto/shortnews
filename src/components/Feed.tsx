@@ -67,15 +67,11 @@ export function Feed({ myGenres, onAddGenre, onRemoveGenre }: Props) {
     return () => node.removeEventListener('scroll', hide)
   }, [showHint])
 
-  useEffect(() => {
-    const node = feedRef.current
-    if (!node) return
-    node.style.overflowY = editorOpen ? 'hidden' : 'auto'
-  }, [editorOpen])
+  const feedLocked = editorOpen || myGenres.length === 0
 
   useEffect(() => {
     const node = feedRef.current
-    if (!node || editorOpen) return
+    if (!node || feedLocked) return
 
     const goTo = (next: number) => {
       const clamped = Math.max(0, Math.min(items.length - 1, next))
@@ -84,6 +80,15 @@ export function Feed({ myGenres, onAddGenre, onRemoveGenre }: Props) {
     }
 
     const onKey = (event: KeyboardEvent) => {
+      if (event.isComposing || event.key === 'Process') return
+      const target = event.target
+      if (
+        target instanceof HTMLElement &&
+        target.closest('input, textarea, select, [contenteditable="true"]')
+      ) {
+        return
+      }
+
       if (event.key === 'ArrowDown' || event.key === 'PageDown' || event.key === 'j') {
         event.preventDefault()
         goTo(activeIndex + 1)
@@ -103,7 +108,7 @@ export function Feed({ myGenres, onAddGenre, onRemoveGenre }: Props) {
 
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
-  }, [activeIndex, items.length, editorOpen])
+  }, [activeIndex, items.length, feedLocked])
 
   const onTabChange = (id: FeedTabId) => {
     setTab(id)
@@ -162,7 +167,11 @@ export function Feed({ myGenres, onAddGenre, onRemoveGenre }: Props) {
         )}
       </header>
 
-      <div ref={feedRef} className="feed" aria-label="マイニュースフィード">
+      <div
+        ref={feedRef}
+        className={`feed${feedLocked ? ' is-static' : ''}`}
+        aria-label="マイニュースフィード"
+      >
         {myGenres.length === 0 ? (
           <div className="empty-state empty-state-search">
             <GenreSearch myGenres={myGenres} onAdd={onAddGenre} autofocus />
