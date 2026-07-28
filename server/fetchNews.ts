@@ -19,6 +19,7 @@ type FeedSource = {
 
 /** 任意ジャンル向け: Bing の site: 検索で横断するメディア */
 const SEARCH_SITES: { host: string; label: string }[] = [
+  // 国内
   { host: 'news.yahoo.co.jp', label: 'Yahoo!ニュース' },
   { host: 'www.asahi.com', label: '朝日新聞' },
   { host: 'mainichi.jp', label: '毎日新聞' },
@@ -26,14 +27,25 @@ const SEARCH_SITES: { host: string; label: string }[] = [
   { host: 'www.nhk.or.jp', label: 'NHK' },
   { host: 'www.nikkansports.com', label: '日刊スポーツ' },
   { host: 'www.sponichi.co.jp', label: 'スポニチ' },
-  { host: 'www.tokyo-sports.co.jp', label: '東スポ' },
-  { host: 'www.daily.co.jp', label: 'デイリースポーツ' },
-  { host: 'number.bunshun.jp', label: 'Number Web' },
   { host: 'www.oricon.co.jp', label: 'ORICON NEWS' },
   { host: 'www.itmedia.co.jp', label: 'ITmedia' },
-  { host: 'gigazine.net', label: 'GIGAZINE' },
   { host: 'toyokeizai.net', label: '東洋経済オンライン' },
+  // 海外（信頼度の高い国際メディア）
   { host: 'www.bbc.com', label: 'BBC' },
+  { host: 'www.reuters.com', label: 'Reuters' },
+  { host: 'apnews.com', label: 'AP News' },
+  { host: 'www.theguardian.com', label: 'The Guardian' },
+  { host: 'www.nytimes.com', label: 'The New York Times' },
+  { host: 'www.washingtonpost.com', label: 'The Washington Post' },
+  { host: 'www.npr.org', label: 'NPR' },
+  { host: 'www.aljazeera.com', label: 'Al Jazeera' },
+  { host: 'www.dw.com', label: 'Deutsche Welle' },
+  { host: 'www.bloomberg.com', label: 'Bloomberg' },
+  { host: 'www.ft.com', label: 'Financial Times' },
+  { host: 'www.economist.com', label: 'The Economist' },
+  { host: 'edition.cnn.com', label: 'CNN' },
+  { host: 'www.abc.net.au', label: 'ABC News Australia' },
+  { host: 'www.nature.com', label: 'Nature' },
 ]
 
 /** 任意ジャンル向け: 直接RSSをキーワードで横断 */
@@ -51,6 +63,36 @@ const SEARCH_MEDIA: Omit<FeedSource, 'genre' | 'query'>[] = [
   {
     url: 'https://feeds.bbci.co.uk/japanese/rss.xml',
     label: 'BBC News 日本語',
+    limit: 24,
+  },
+  {
+    url: 'https://feeds.bbci.co.uk/news/world/rss.xml',
+    label: 'BBC News World',
+    limit: 24,
+  },
+  {
+    url: 'https://www.theguardian.com/world/rss',
+    label: 'The Guardian',
+    limit: 24,
+  },
+  {
+    url: 'https://rss.nytimes.com/services/xml/rss/nyt/World.xml',
+    label: 'The New York Times',
+    limit: 24,
+  },
+  {
+    url: 'https://feeds.npr.org/1004/rss.xml',
+    label: 'NPR',
+    limit: 20,
+  },
+  {
+    url: 'https://www.aljazeera.com/xml/rss/all.xml',
+    label: 'Al Jazeera',
+    limit: 20,
+  },
+  {
+    url: 'https://rss.dw.com/rdf/rss-en-all',
+    label: 'Deutsche Welle',
     limit: 24,
   },
   {
@@ -230,7 +272,61 @@ const FEEDS: FeedSource[] = [
     genre: 'world',
     url: 'https://news.yahoo.co.jp/rss/categories/world.xml',
     label: 'Yahoo!ニュース 国際',
-    limit: 12,
+    limit: 10,
+  },
+  {
+    genre: 'world',
+    url: 'https://feeds.bbci.co.uk/news/world/rss.xml',
+    label: 'BBC News World',
+    limit: 10,
+  },
+  {
+    genre: 'world',
+    url: 'https://feeds.bbci.co.uk/japanese/rss.xml',
+    label: 'BBC News 日本語',
+    limit: 8,
+  },
+  {
+    genre: 'world',
+    url: 'https://www.theguardian.com/world/rss',
+    label: 'The Guardian',
+    limit: 10,
+  },
+  {
+    genre: 'world',
+    url: 'https://rss.nytimes.com/services/xml/rss/nyt/World.xml',
+    label: 'The New York Times',
+    limit: 10,
+  },
+  {
+    genre: 'world',
+    url: 'https://www.aljazeera.com/xml/rss/all.xml',
+    label: 'Al Jazeera',
+    limit: 8,
+  },
+  {
+    genre: 'world',
+    url: 'https://rss.dw.com/rdf/rss-en-all',
+    label: 'Deutsche Welle',
+    limit: 8,
+  },
+  {
+    genre: 'world',
+    url: 'https://feeds.npr.org/1004/rss.xml',
+    label: 'NPR',
+    limit: 8,
+  },
+  {
+    genre: 'world',
+    url: 'https://www.france24.com/en/rss',
+    label: 'France 24',
+    limit: 8,
+  },
+  {
+    genre: 'world',
+    url: 'https://www.abc.net.au/news/feed/45910/rss.xml',
+    label: 'ABC News Australia',
+    limit: 8,
   },
 
   // 科学
@@ -244,12 +340,72 @@ const FEEDS: FeedSource[] = [
     genre: 'science',
     url: 'https://news.yahoo.co.jp/rss/categories/science.xml',
     label: 'Yahoo!ニュース 科学',
-    limit: 12,
+    limit: 10,
+  },
+  {
+    genre: 'science',
+    url: 'https://feeds.bbci.co.uk/news/science_and_environment/rss.xml',
+    label: 'BBC Science',
+    limit: 10,
+  },
+  {
+    genre: 'science',
+    url: 'https://www.nature.com/nature.rss',
+    label: 'Nature',
+    limit: 8,
+  },
+  {
+    genre: 'science',
+    url: 'https://www.science.org/rss/news_current.xml',
+    label: 'Science',
+    limit: 8,
   },
   {
     genre: 'tech',
     url: 'https://www.watch.impress.co.jp/data/rss/1.0/ipw/feed.rdf',
     label: 'INTERNET Watch',
+    limit: 8,
+  },
+  {
+    genre: 'tech',
+    url: 'https://feeds.bbci.co.uk/news/technology/rss.xml',
+    label: 'BBC Technology',
+    limit: 8,
+  },
+  {
+    genre: 'tech',
+    url: 'https://rss.nytimes.com/services/xml/rss/nyt/Technology.xml',
+    label: 'The New York Times',
+    limit: 8,
+  },
+  {
+    genre: 'business',
+    url: 'https://feeds.bloomberg.com/markets/news.rss',
+    label: 'Bloomberg',
+    limit: 8,
+  },
+  {
+    genre: 'business',
+    url: 'https://feeds.bbci.co.uk/news/business/rss.xml',
+    label: 'BBC Business',
+    limit: 8,
+  },
+  {
+    genre: 'business',
+    url: 'https://rss.nytimes.com/services/xml/rss/nyt/Business.xml',
+    label: 'The New York Times',
+    limit: 8,
+  },
+  {
+    genre: 'politics',
+    url: 'https://rss.politico.com/politics-news.xml',
+    label: 'Politico',
+    limit: 8,
+  },
+  {
+    genre: 'politics',
+    url: 'https://feeds.npr.org/1001/rss.xml',
+    label: 'NPR',
     limit: 8,
   },
 
@@ -498,6 +654,23 @@ function publisherFromUrl(link: string): string | null {
       'bbci.co.uk': 'BBC',
       'livedoor.com': 'ライブドアニュース',
       'msn.com': 'MSN',
+      'reuters.com': 'Reuters',
+      'apnews.com': 'AP News',
+      'theguardian.com': 'The Guardian',
+      'nytimes.com': 'The New York Times',
+      'washingtonpost.com': 'The Washington Post',
+      'npr.org': 'NPR',
+      'aljazeera.com': 'Al Jazeera',
+      'dw.com': 'Deutsche Welle',
+      'bloomberg.com': 'Bloomberg',
+      'ft.com': 'Financial Times',
+      'economist.com': 'The Economist',
+      'cnn.com': 'CNN',
+      'abc.net.au': 'ABC News Australia',
+      'nature.com': 'Nature',
+      'science.org': 'Science',
+      'france24.com': 'France 24',
+      'politico.com': 'Politico',
     }
     for (const [domain, label] of Object.entries(known)) {
       if (host === domain || host.endsWith(`.${domain}`)) return label
@@ -726,21 +899,40 @@ function feedsForGenre(id: GenreId): FeedSource[] {
       },
       {
         genre: id,
-        url: `https://www.bing.com/news/search?q=${encoded}&format=RSS&mkt=ja-JP`,
-        label: `Bing ニュース · ${query}`,
+        url: `https://news.google.com/rss/search?q=${encoded}&hl=en&gl=US&ceid=US:en`,
+        label: `Google News World · ${query}`,
         limit: 8,
       },
-      ...SEARCH_SITES.map((site) => ({
+      {
         genre: id,
-        url: `https://www.bing.com/news/search?q=${encodeURIComponent(`${query} site:${site.host}`)}&format=RSS&mkt=ja-JP`,
-        label: site.label,
+        url: `https://www.bing.com/news/search?q=${encoded}&format=RSS&mkt=ja-JP`,
+        label: `Bing ニュース · ${query}`,
         limit: 6,
-      })),
+      },
+      {
+        genre: id,
+        url: `https://www.bing.com/news/search?q=${encoded}&format=RSS&mkt=en-US`,
+        label: `Bing News World · ${query}`,
+        limit: 8,
+      },
+      ...SEARCH_SITES.map((site) => {
+        const market = /\.jp$|yahoo\.co\.jp|nhk\.or\.jp|nikkei\.com|asahi\.com|mainichi\.jp|oricon\.co\.jp|itmedia\.co\.jp|toyokeizai\.net/.test(
+          site.host,
+        )
+          ? 'ja-JP'
+          : 'en-US'
+        return {
+          genre: id,
+          url: `https://www.bing.com/news/search?q=${encodeURIComponent(`${query} site:${site.host}`)}&format=RSS&mkt=${market}`,
+          label: site.label,
+          limit: 5,
+        }
+      }),
       ...SEARCH_MEDIA.map((feed) => ({
         ...feed,
         genre: id,
         query,
-        limit: Math.min(feed.limit ?? 12, 6),
+        limit: Math.min(feed.limit ?? 12, 5),
       })),
     ]
   }
@@ -788,7 +980,7 @@ export async function fetchLatestNews(
 
   if (feeds.length === 0) return []
 
-  const settled = await mapSettled(feeds, 8, (feed) => fetchFeed(feed))
+  const settled = await mapSettled(feeds, 10, (feed) => fetchFeed(feed))
   const collected: NewsItem[] = []
   const failures: string[] = []
 

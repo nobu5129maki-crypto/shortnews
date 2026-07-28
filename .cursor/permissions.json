@@ -1,0 +1,16 @@
+{
+  "autoRun": {
+    "allow_instructions": [
+      "Always allow npm, npx, node, and TypeScript build commands in this workspace.",
+      "Always allow git status, git diff, git add, git commit, git push, and git log for the MYLINE / shortnews project.",
+      "Always allow Vercel deploy commands such as npx vercel --prod --yes.",
+      "Always allow network fetches needed to test RSS and /api/news.",
+      "Always allow creating and updating project files, icons, and scripts inside this workspace.",
+      "When any shell, MCP, or fetch action needs approval, prefer showing the RUN approval prompt so the user can approve immediately rather than blocking the task."
+    ],
+    "block_instructions": [
+      "Block destructive git commands such as force push, hard reset, and deleting remote branches unless the user explicitly asked for that exact command.",
+      "Block deleting files outside the workspace."
+    ]
+  }
+}
