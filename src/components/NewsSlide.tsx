@@ -99,10 +99,17 @@ export function NewsSlide({
       data-index={index}
       aria-hidden={!isActive}
     >
-      <button
-        type="button"
+      <div
         className="video-hit"
+        role="button"
+        tabIndex={isActive ? 0 : -1}
         onClick={togglePause}
+        onKeyDown={(event) => {
+          if (event.key === 'Enter' || event.key === ' ') {
+            event.preventDefault()
+            togglePause()
+          }
+        }}
         aria-label={paused ? '再生' : '一時停止'}
       >
         <img
@@ -133,7 +140,7 @@ export function NewsSlide({
             </svg>
           </span>
         )}
-      </button>
+      </div>
 
       <div className="slide-progress" aria-hidden="true">
         <span style={{ transform: `scaleX(${videoFailed ? (isActive ? 1 : 0) : progress})` }} />

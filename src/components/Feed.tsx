@@ -94,7 +94,7 @@ export function Feed({ myGenres, onAddGenre, onRemoveGenre }: Props) {
       }
       if (event.key === ' ') {
         event.preventDefault()
-        const active = node.querySelector<HTMLButtonElement>(
+        const active = node.querySelector<HTMLElement>(
           `[data-index="${activeIndex}"] .video-hit`,
         )
         active?.click()

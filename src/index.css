@@ -314,6 +314,8 @@ button {
   scroll-behavior: smooth;
   overscroll-behavior-y: contain;
   scrollbar-width: none;
+  touch-action: pan-y;
+  -webkit-overflow-scrolling: touch;
 }
 
 .feed::-webkit-scrollbar {
@@ -340,6 +342,7 @@ button {
   padding: 0;
   border: 0;
   background: transparent;
+  touch-action: pan-y;
 }
 
 .slide-poster,
@@ -487,14 +490,11 @@ button {
   right: 72px;
   bottom: 0;
   z-index: 20;
-  max-height: min(62%, 460px);
-  overflow-x: hidden;
-  overflow-y: auto;
-  overscroll-behavior: contain;
+  max-height: min(58%, 420px);
+  overflow: hidden;
   padding: 20px 18px calc(28px + var(--safe-bottom));
-  -webkit-overflow-scrolling: touch;
-  scrollbar-width: thin;
-  scrollbar-color: rgba(255, 255, 255, 0.25) transparent;
+  pointer-events: none;
+  touch-action: pan-y;
   animation: rise-in 420ms ease both;
 }
 
@@ -556,6 +556,10 @@ button {
   white-space: pre-wrap;
   overflow-wrap: anywhere;
   text-shadow: 0 1px 12px rgba(0, 0, 0, 0.7);
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 10;
+  overflow: hidden;
 }
 
 .slide-source {
@@ -576,6 +580,8 @@ button {
   color: var(--lane);
   text-decoration: none;
   text-shadow: 0 1px 10px rgba(0, 0, 0, 0.55);
+  pointer-events: auto;
+  touch-action: manipulation;
 }
 
 .slide-link:active {
@@ -590,6 +596,8 @@ button {
   display: flex;
   flex-direction: column;
   gap: 16px;
+  pointer-events: auto;
+  touch-action: manipulation;
 }
 
 .action-btn {
