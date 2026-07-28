@@ -6,6 +6,7 @@ import type {
 } from './types.js'
 import { isSearchGenre, labelFromGenreId } from './types.js'
 import { enrichArticleBody } from './enrichArticle.js'
+import { isRelevantToGenre } from './genreRelevance.js'
 import { cleanDetailText } from './textClean.js'
 import { translateToJapanese } from './translate.js'
 
@@ -732,20 +733,6 @@ function buildKeyPoints(title: string, description: string): string[] {
   ]
 }
 
-function resolveGenre(
-  assigned: GenreId,
-  title: string,
-  description: string,
-): GenreId {
-  if (assigned === 'ai' || isSearchGenre(assigned)) return assigned
-  if (AI_PATTERN.test(`${title} ${description}`)) {
-    if (assigned === 'tech' || assigned === 'science' || assigned === 'business') {
-      return 'ai'
-    }
-  }
-  return assigned
-}
-
 function postersFor(genre: GenreId): string[] {
   if (genre in POSTERS) return POSTERS[genre as BuiltinGenreId]
   return DEFAULT_POSTERS
@@ -755,16 +742,25 @@ async function toNewsItem(
   item: RssItem,
   genre: GenreId,
   sourceLabel: string,
-): Promise<NewsItem> {
+  feedUrl = '',
+): Promise<NewsItem | null> {
   const seed = hashId(item.link || item.title)
   let description = cleanDetailText(item.description || item.title)
   description = await enrichArticleBody(item.link, description)
+
+  // 本文補完後にもう一度ジャンル適合を確認（組み込みジャンルのみ）
+  if (
+    !isSearchGenre(genre) &&
+    !isRelevantToGenre(genre, item.title, description, feedUrl)
+  ) {
+    return null
+  }
+
   const summary = buildSummary(description)
-  const resolvedGenre = resolveGenre(genre, item.title, description)
 
   return {
     id: `live-${seed.toString(16)}`,
-    genre: resolvedGenre,
+    genre,
     title: item.title,
     summary,
     detail: description || item.title,
@@ -774,7 +770,7 @@ async function toNewsItem(
     publishedAt: toIso(item.pubDate),
     url: item.link || undefined,
     videoUrl: pick(VIDEOS, seed),
-    posterUrl: pick(postersFor(resolvedGenre), seed),
+    posterUrl: pick(postersFor(genre), seed),
     likes: 200 + (seed % 8000),
     comments: 20 + (seed % 500),
   }
@@ -819,35 +815,49 @@ async function fetchFeed(source: FeedSource): Promise<NewsItem[]> {
     )
   }
 
-  if (source.query) {
-    filtered = filtered.filter((item) => matchesQuery(item, source.query!))
+  const isEngineSearch =
+    /news\.google\.com\/rss\/search|bing\.com\/news\/search/i.test(source.url)
+
+  if (isSearchGenre(source.genre)) {
+    // 横断RSSはクエリ一致必須。検索エンジン結果はエンジンの関連度を信頼
+    if (source.query && !isEngineSearch) {
+      filtered = filtered.filter((item) => matchesQuery(item, source.query!))
+    }
+  } else {
+    filtered = filtered.filter((item) =>
+      isRelevantToGenre(source.genre, item.title, item.description, source.url),
+    )
+  }
+
+  // 検索ジャンルはタイトル一致を優先して並べ替え
+  if (isSearchGenre(source.genre)) {
+    const q = labelFromGenreId(source.genre)
+    filtered = filtered.slice().sort((a, b) => {
+      const aTitle = a.title.includes(q) ? 1 : 0
+      const bTitle = b.title.includes(q) ? 1 : 0
+      return bTitle - aTitle
+    })
   }
 
   const settled = await mapSettled(filtered.slice(0, limit), 3, (item) =>
-    toNewsItem(item, source.genre, source.label),
+    toNewsItem(item, source.genre, source.label, source.url),
   )
 
   return settled
     .filter(
       (result): result is PromiseFulfilledResult<NewsItem> =>
-        result.status === 'fulfilled',
+        result.status === 'fulfilled' && result.value !== null,
     )
-    .map((result) => result.value)
+    .map((result) => result.value as NewsItem)
 }
 
 function matchesQuery(item: RssItem, query: string): boolean {
-  const haystack = `${item.title}\n${item.description}`
-  const normalized = query.trim()
-  if (!normalized) return true
-  if (haystack.includes(normalized)) return true
-
-  const tokens = normalized
-    .split(/[\s　・/｜|]+/)
-    .map((token) => token.trim())
-    .filter((token) => token.length >= 2)
-
-  if (tokens.length <= 1) return false
-  return tokens.every((token) => haystack.includes(token))
+  return isRelevantToGenre(
+    // ダミーの search id ではなくクエリ直接判定のため、一時 id を組む
+    `search:${encodeURIComponent(query)}`,
+    item.title,
+    item.description,
+  )
 }
 
 function dedupe(items: NewsItem[]): NewsItem[] {
