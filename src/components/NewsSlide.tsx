@@ -10,10 +10,8 @@ type Props = {
   isActive: boolean
   liked: boolean
   saved: boolean
-  detailOpen: boolean
   onLike: () => void
   onSave: () => void
-  onOpenDetail: () => void
 }
 
 export function NewsSlide({
@@ -22,10 +20,8 @@ export function NewsSlide({
   isActive,
   liked,
   saved,
-  detailOpen,
   onLike,
   onSave,
-  onOpenDetail,
 }: Props) {
   const videoRef = useRef<HTMLVideoElement>(null)
   const [paused, setPaused] = useState(false)
@@ -45,7 +41,7 @@ export function NewsSlide({
     const video = videoRef.current
     if (!video || videoFailed) return
 
-    const shouldPlay = isActive && !paused && !detailOpen
+    const shouldPlay = isActive && !paused
     if (shouldPlay) {
       const playPromise = video.play()
       if (playPromise) playPromise.catch(() => undefined)
@@ -57,7 +53,7 @@ export function NewsSlide({
         setPaused(false)
       }
     }
-  }, [isActive, paused, videoFailed, detailOpen])
+  }, [isActive, paused, videoFailed])
 
   useEffect(() => {
     const video = videoRef.current
@@ -73,21 +69,23 @@ export function NewsSlide({
   }, [isActive, videoFailed])
 
   const togglePause = () => {
-    if (!isActive || detailOpen) return
+    if (!isActive) return
     setPaused((value) => !value)
   }
 
   const share = async () => {
     const shareData = {
       title: item.title,
-      text: `${item.title} — ${item.summary}`,
-      url: window.location.href,
+      text: `${item.title} — ${item.detail}`,
+      url: item.url || window.location.href,
     }
     try {
       if (navigator.share) {
         await navigator.share(shareData)
       } else {
-        await navigator.clipboard.writeText(`${item.title}\n${window.location.href}`)
+        await navigator.clipboard.writeText(
+          `${item.title}\n${item.url || window.location.href}`,
+        )
       }
     } catch {
       /* user cancelled */
@@ -127,7 +125,8 @@ export function NewsSlide({
           />
         )}
         <div className="slide-scrim" aria-hidden="true" />
-        {paused && isActive && !detailOpen && (
+        <div className="slide-read-band" aria-hidden="true" />
+        {paused && isActive && (
           <span className="pause-mark" aria-hidden="true">
             <svg viewBox="0 0 24 24">
               <path d="M8 6v12l10-6-10-6z" fill="currentColor" />
@@ -143,23 +142,22 @@ export function NewsSlide({
       <div className="slide-meta">
         <div className="meta-top">
           <span className="genre-tag">{genreLabel}</span>
-          <span className="ai-badge">AI要約</span>
           <span className="meta-time">{formatRelativeTime(item.publishedAt)}</span>
         </div>
         <h2 className="slide-title">{item.title}</h2>
-        <p className="slide-summary">{item.summary}</p>
-
-        <div className="related-row">
-          <button
-            type="button"
-            className="related-btn is-primary"
-            onClick={onOpenDetail}
-          >
-            詳しく
-          </button>
-        </div>
-
+        <p className="slide-detail">{item.detail}</p>
         <p className="slide-source">{item.source}</p>
+        {item.url && (
+          <a
+            className="slide-link"
+            href={item.url}
+            target="_blank"
+            rel="noopener noreferrer"
+            onClick={(event) => event.stopPropagation()}
+          >
+            元記事を読む
+          </a>
+        )}
       </div>
 
       <ActionRail

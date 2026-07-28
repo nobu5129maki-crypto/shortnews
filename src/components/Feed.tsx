@@ -1,10 +1,9 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import type { FeedTabId, GenreId, NewsItem } from '../types'
+import type { FeedTabId, GenreId } from '../types'
 import { resolveGenres } from '../lib/genres'
 import { useActiveSlide } from '../hooks/useActiveSlide'
 import { useLiveNews } from '../hooks/useLiveNews'
 import { formatClock } from '../utils/format'
-import { DetailPanel } from './DetailPanel'
 import { GenreBar } from './GenreBar'
 import { GenreEditor } from './GenreEditor'
 import { GenreSearch } from './GenreSearch'
@@ -24,7 +23,6 @@ export function Feed({ myGenres, onAddGenre, onRemoveGenre }: Props) {
   const [saved, setSaved] = useState<Record<string, boolean>>({})
   const [showHint, setShowHint] = useState(true)
   const [editorOpen, setEditorOpen] = useState(false)
-  const [detailItem, setDetailItem] = useState<NewsItem | null>(null)
   const { items: liveItems, updatedAt, loading, refreshing, error, source, refresh } =
     useLiveNews(myGenres)
 
@@ -41,7 +39,6 @@ export function Feed({ myGenres, onAddGenre, onRemoveGenre }: Props) {
   }, [tab, myGenreSet, liveItems, myGenres.length])
 
   const activeIndex = useActiveSlide(feedRef, items.length)
-  const detailOpen = detailItem !== null
 
   useEffect(() => {
     if (tab !== 'mine' && !myGenreSet.has(tab)) {
@@ -73,12 +70,12 @@ export function Feed({ myGenres, onAddGenre, onRemoveGenre }: Props) {
   useEffect(() => {
     const node = feedRef.current
     if (!node) return
-    node.style.overflowY = detailOpen || editorOpen ? 'hidden' : 'auto'
-  }, [detailOpen, editorOpen])
+    node.style.overflowY = editorOpen ? 'hidden' : 'auto'
+  }, [editorOpen])
 
   useEffect(() => {
     const node = feedRef.current
-    if (!node || editorOpen || detailOpen) return
+    if (!node || editorOpen) return
 
     const goTo = (next: number) => {
       const clamped = Math.max(0, Math.min(items.length - 1, next))
@@ -106,16 +103,11 @@ export function Feed({ myGenres, onAddGenre, onRemoveGenre }: Props) {
 
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
-  }, [activeIndex, items.length, editorOpen, detailOpen])
+  }, [activeIndex, items.length, editorOpen])
 
   const onTabChange = (id: FeedTabId) => {
     setTab(id)
     setShowHint(true)
-    setDetailItem(null)
-  }
-
-  const openDetail = (item: NewsItem) => {
-    setDetailItem(item)
   }
 
   return (
@@ -197,21 +189,19 @@ export function Feed({ myGenres, onAddGenre, onRemoveGenre }: Props) {
               isActive={index === activeIndex}
               liked={Boolean(liked[item.id])}
               saved={Boolean(saved[item.id])}
-              detailOpen={detailOpen && detailItem?.id === item.id}
               onLike={() =>
                 setLiked((prev) => ({ ...prev, [item.id]: !prev[item.id] }))
               }
               onSave={() =>
                 setSaved((prev) => ({ ...prev, [item.id]: !prev[item.id] }))
               }
-              onOpenDetail={() => openDetail(item)}
             />
           ))
         )}
       </div>
 
       <SwipeHint
-        visible={showHint && items.length > 1 && !editorOpen && !detailOpen}
+        visible={showHint && items.length > 1 && !editorOpen}
       />
 
       <GenreEditor
@@ -221,14 +211,6 @@ export function Feed({ myGenres, onAddGenre, onRemoveGenre }: Props) {
         onAdd={onAddGenre}
         onRemove={onRemoveGenre}
       />
-
-      {detailItem && (
-        <DetailPanel
-          item={detailItem}
-          open={detailOpen}
-          onClose={() => setDetailItem(null)}
-        />
-      )}
     </div>
   )
 }
