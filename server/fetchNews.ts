@@ -5,6 +5,9 @@ import type {
   NewsItem,
 } from './types.js'
 import { isSearchGenre, labelFromGenreId } from './types.js'
+import { enrichArticleBody } from './enrichArticle.js'
+import { cleanDetailText } from './textClean.js'
+import { translateToJapanese } from './translate.js'
 
 export type { NewsApiResponse }
 
@@ -537,13 +540,17 @@ function linkValue(block: string, attrs = ''): string {
 }
 
 function descriptionValue(block: string): string {
-  return (
-    tagValue(block, 'content:encoded') ||
-    tagValue(block, 'content') ||
-    tagValue(block, 'description') ||
-    tagValue(block, 'summary') ||
-    tagValue(block, 'dc:description')
-  )
+  const candidates = [
+    tagValue(block, 'content:encoded'),
+    tagValue(block, 'content'),
+    tagValue(block, 'description'),
+    tagValue(block, 'summary'),
+    tagValue(block, 'dc:description'),
+    tagValue(block, 'media:description'),
+  ].filter((value) => value.length > 0)
+
+  if (candidates.length === 0) return ''
+  return candidates.sort((a, b) => b.length - a.length)[0]
 }
 
 function dateValue(block: string): string {
@@ -721,27 +728,8 @@ function buildKeyPoints(title: string, description: string): string[] {
   return [
     title,
     description.slice(0, 48).replace(/。$/, ''),
-    '詳細はパネルで全文を確認できます',
+    '全文はスライド内で確認できます',
   ]
-}
-
-function cleanDetailText(value: string): string {
-  return value
-    .replace(/<!\[CDATA\[([\s\S]*?)\]\]>/g, '$1')
-    .replace(/<br\s*\/?>/gi, '\n')
-    .replace(/<\/(?:p|div|li|h[1-6]|tr)>/gi, '\n')
-    .replace(/<[^>]+>/g, '')
-    .replace(/&amp;/g, '&')
-    .replace(/&lt;/g, '<')
-    .replace(/&gt;/g, '>')
-    .replace(/&quot;/g, '"')
-    .replace(/&#39;/g, "'")
-    .replace(/&nbsp;/g, ' ')
-    .replace(/\r\n?/g, '\n')
-    .replace(/[ \t]+\n/g, '\n')
-    .replace(/\n{3,}/g, '\n\n')
-    .replace(/[ \t]{2,}/g, ' ')
-    .trim()
 }
 
 function resolveGenre(
@@ -763,13 +751,14 @@ function postersFor(genre: GenreId): string[] {
   return DEFAULT_POSTERS
 }
 
-function toNewsItem(
+async function toNewsItem(
   item: RssItem,
   genre: GenreId,
   sourceLabel: string,
-): NewsItem {
+): Promise<NewsItem> {
   const seed = hashId(item.link || item.title)
-  const description = cleanDetailText(item.description || item.title)
+  let description = cleanDetailText(item.description || item.title)
+  description = await enrichArticleBody(item.link, description)
   const summary = buildSummary(description)
   const resolvedGenre = resolveGenre(genre, item.title, description)
 
@@ -788,6 +777,21 @@ function toNewsItem(
     posterUrl: pick(postersFor(resolvedGenre), seed),
     likes: 200 + (seed % 8000),
     comments: 20 + (seed % 500),
+  }
+}
+
+async function localizeNewsItem(item: NewsItem): Promise<NewsItem> {
+  const [title, detail] = await Promise.all([
+    translateToJapanese(item.title),
+    translateToJapanese(item.detail),
+  ])
+  if (title === item.title && detail === item.detail) return item
+  return {
+    ...item,
+    title,
+    detail,
+    summary: buildSummary(detail),
+    keyPoints: buildKeyPoints(title, detail),
   }
 }
 
@@ -819,9 +823,16 @@ async function fetchFeed(source: FeedSource): Promise<NewsItem[]> {
     filtered = filtered.filter((item) => matchesQuery(item, source.query!))
   }
 
-  return filtered
-    .slice(0, limit)
-    .map((item) => toNewsItem(item, source.genre, source.label))
+  const settled = await mapSettled(filtered.slice(0, limit), 3, (item) =>
+    toNewsItem(item, source.genre, source.label),
+  )
+
+  return settled
+    .filter(
+      (result): result is PromiseFulfilledResult<NewsItem> =>
+        result.status === 'fulfilled',
+    )
+    .map((result) => result.value)
 }
 
 function matchesQuery(item: RssItem, query: string): boolean {
@@ -1003,7 +1014,12 @@ export async function fetchLatestNews(
       ? collected.filter((item) => genreIds.includes(item.genre))
       : collected
 
-  return balanceByGenre(dedupe(filtered))
+  const balanced = balanceByGenre(dedupe(filtered))
+  const localized = await mapSettled(balanced, 4, localizeNewsItem)
+
+  return localized.map((result, index) =>
+    result.status === 'fulfilled' ? result.value : balanced[index],
+  )
 }
 
 export function parseGenreQuery(value: string | null): GenreId[] | undefined {
