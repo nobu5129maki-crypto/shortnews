@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useRef, useState, type CSSProperties } from 'react'
 import type { NewsItem } from '../types'
 import { resolveGenre } from '../lib/genres'
 import { formatRelativeTime } from '../utils/format'
@@ -10,6 +10,7 @@ type Props = {
   isActive: boolean
   liked: boolean
   saved: boolean
+  textScale: number
   onLike: () => void
   onSave: () => void
 }
@@ -20,6 +21,7 @@ export function NewsSlide({
   isActive,
   liked,
   saved,
+  textScale,
   onLike,
   onSave,
 }: Props) {
@@ -29,6 +31,12 @@ export function NewsSlide({
   const [videoFailed, setVideoFailed] = useState(false)
   const [videoReady, setVideoReady] = useState(false)
   const genreLabel = resolveGenre(item.genre).label
+  const showKeyPoints =
+    item.keyPoints.length > 0 &&
+    !item.keyPoints.every(
+      (point) =>
+        item.detail.includes(point) || item.detail.includes(`${point}。`),
+    )
 
   useEffect(() => {
     setVideoFailed(false)
@@ -146,13 +154,34 @@ export function NewsSlide({
         <span style={{ transform: `scaleX(${videoFailed ? (isActive ? 1 : 0) : progress})` }} />
       </div>
 
-      <div className="slide-meta">
+      <div
+        className="slide-meta"
+        style={{ '--slide-text-scale': String(textScale) } as CSSProperties}
+      >
         <div className="meta-top">
           <span className="genre-tag">{genreLabel}</span>
           <span className="meta-time">{formatRelativeTime(item.publishedAt)}</span>
         </div>
         <h2 className="slide-title">{item.title}</h2>
+        {showKeyPoints && (
+          <ul className="slide-points">
+            {item.keyPoints.map((point) => (
+              <li key={point}>{point}</li>
+            ))}
+          </ul>
+        )}
         <p className="slide-detail">{item.detail}</p>
+        {item.related.length > 0 && (
+          <div className="slide-related">
+            <p className="slide-related-label">関連ポイント</p>
+            {item.related.map((topic) => (
+              <div key={topic.id} className="slide-related-item">
+                <p className="slide-related-title">{topic.label}</p>
+                <p className="slide-related-detail">{topic.detail}</p>
+              </div>
+            ))}
+          </div>
+        )}
         <p className="slide-source">{item.source}</p>
         {item.url && (
           <a
