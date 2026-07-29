@@ -958,17 +958,11 @@ function feedsForGenre(id: GenreId, compact = false): FeedSource[] {
       // 複数ジャンル時はタイムアウト回避のため主要ソースに絞る
       return [
         ...primary,
-        {
-          genre: id,
-          url: `https://news.google.com/rss/search?q=${encoded}&hl=en&gl=US&ceid=US:en`,
-          label: `Google News World · ${query}`,
-          limit: 6,
-        },
-        ...SEARCH_MEDIA.slice(0, 4).map((feed) => ({
+        ...SEARCH_MEDIA.slice(0, 6).map((feed) => ({
           ...feed,
           genre: id,
           query,
-          limit: Math.min(feed.limit ?? 12, 4),
+          limit: Math.min(feed.limit ?? 12, 6),
         })),
       ]
     }
@@ -977,17 +971,17 @@ function feedsForGenre(id: GenreId, compact = false): FeedSource[] {
       ...primary,
       {
         genre: id,
-        url: `https://news.google.com/rss/search?q=${encoded}&hl=en&gl=US&ceid=US:en`,
-        label: `Google News World · ${query}`,
-        limit: 8,
-      },
-      {
-        genre: id,
         url: `https://www.bing.com/news/search?q=${encoded}&format=RSS&mkt=en-US`,
         label: `Bing News World · ${query}`,
         limit: 8,
       },
-      ...SEARCH_SITES.map((site) => {
+      {
+        genre: id,
+        url: `https://news.google.com/rss/search?q=${encoded}&hl=en&gl=US&ceid=US:en`,
+        label: `Google News World · ${query}`,
+        limit: 6,
+      },
+      ...SEARCH_SITES.slice(0, 12).map((site) => {
         const market = /\.jp$|yahoo\.co\.jp|nhk\.or\.jp|nikkei\.com|asahi\.com|mainichi\.jp|oricon\.co\.jp|itmedia\.co\.jp|toyokeizai\.net/.test(
           site.host,
         )
@@ -997,7 +991,7 @@ function feedsForGenre(id: GenreId, compact = false): FeedSource[] {
           genre: id,
           url: `https://www.bing.com/news/search?q=${encodeURIComponent(`${query} site:${site.host}`)}&format=RSS&mkt=${market}`,
           label: site.label,
-          limit: 5,
+          limit: 4,
         }
       }),
       ...SEARCH_MEDIA.map((feed) => ({
