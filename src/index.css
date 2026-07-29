@@ -653,6 +653,10 @@ button {
   white-space: pre-wrap;
   overflow-wrap: anywhere;
   text-shadow: 0 1px 12px rgba(0, 0, 0, 0.7);
+  display: block;
+  max-height: none;
+  -webkit-line-clamp: unset;
+  overflow: visible;
 }
 
 .slide-related {

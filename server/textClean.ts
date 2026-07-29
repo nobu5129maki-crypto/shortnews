@@ -67,3 +67,31 @@ export function isThinDetail(detail: string, title: string): boolean {
   }
   return false
 }
+
+/** 文の途中で切れている（メタdescriptionの途中切れなど） */
+export function looksTruncated(value: string): boolean {
+  const cleaned = cleanDetailText(value)
+  if (!cleaned) return true
+  if (cleaned.length < 80) return true
+  if (/[。．.！？!?…]$/.test(cleaned)) return false
+  // 末尾が助詞・未完成っぽいとき
+  if (/[のがをにではともっプラッてし、,]$/.test(cleaned)) return true
+  if (cleaned.length < 420 && !/[。．.！？!?]/.test(cleaned.slice(-40))) {
+    return true
+  }
+  // 英単語の途中で終わっている
+  if (/[A-Za-z]{3,}$/.test(cleaned)) return true
+  return false
+}
+
+/** 途中切れ本文を、最後の文末で揃える（取れないときの見た目改善） */
+export function softTrimTruncation(value: string): string {
+  const cleaned = cleanDetailText(value)
+  if (!cleaned || !looksTruncated(cleaned)) return cleaned
+  const parts = cleaned.split(/(?<=[。．.！？!?])\s*/)
+  if (parts.length >= 2) {
+    const complete = parts.slice(0, -1).join('').trim()
+    if (complete.length >= 60) return complete
+  }
+  return cleaned
+}
