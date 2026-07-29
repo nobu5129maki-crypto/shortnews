@@ -750,8 +750,8 @@ async function toNewsItem(
   let description = cleanDetailText(item.description || '')
   if (isBoilerplateDetail(description)) description = ''
 
-  const enriched = await enrichArticleBody(item.link, description)
-  description = cleanDetailText(enriched)
+  const enriched = await enrichArticleBody(item.link, description, item.title)
+  description = cleanDetailText(enriched.detail)
   if (isBoilerplateDetail(description)) description = ''
 
   // 本文が取れない場合はタイトルを詳細の代わりに使う（定型文は載せない）
@@ -770,6 +770,7 @@ async function toNewsItem(
   }
 
   const summary = buildSummary(detail)
+  const resolvedUrl = enriched.resolvedUrl || item.link || undefined
 
   return {
     id: `live-${seed.toString(16)}`,
@@ -781,7 +782,7 @@ async function toNewsItem(
     related: [],
     source: resolveSourceLabel(sourceLabel, item),
     publishedAt: toIso(item.pubDate),
-    url: item.link || undefined,
+    url: resolvedUrl,
     videoUrl: pick(VIDEOS, seed),
     posterUrl: pick(postersFor(genre), seed),
     likes: 200 + (seed % 8000),
@@ -941,15 +942,15 @@ function feedsForGenre(id: GenreId, compact = false): FeedSource[] {
     const primary: FeedSource[] = [
       {
         genre: id,
-        url: `https://news.google.com/rss/search?q=${encoded}&hl=ja&gl=JP&ceid=JP:ja`,
-        label: `Google ニュース · ${query}`,
+        url: `https://www.bing.com/news/search?q=${encoded}&format=RSS&mkt=ja-JP`,
+        label: `Bing ニュース · ${query}`,
         limit: compact ? 10 : 8,
       },
       {
         genre: id,
-        url: `https://www.bing.com/news/search?q=${encoded}&format=RSS&mkt=ja-JP`,
-        label: `Bing ニュース · ${query}`,
-        limit: compact ? 8 : 6,
+        url: `https://news.google.com/rss/search?q=${encoded}&hl=ja&gl=JP&ceid=JP:ja`,
+        label: `Google ニュース · ${query}`,
+        limit: compact ? 8 : 8,
       },
     ]
 
