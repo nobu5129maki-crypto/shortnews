@@ -9,6 +9,8 @@ import { GenreEditor } from './GenreEditor'
 import { GenreSearch } from './GenreSearch'
 import { NewsSlide } from './NewsSlide'
 import { SwipeHint } from './SwipeHint'
+import { TextScaleControl } from './TextScaleControl'
+import { useTextScale } from '../hooks/useTextScale'
 
 type Props = {
   myGenres: GenreId[]
@@ -25,6 +27,13 @@ export function Feed({ myGenres, onAddGenre, onRemoveGenre }: Props) {
   const [editorOpen, setEditorOpen] = useState(false)
   const { items: liveItems, updatedAt, loading, refreshing, error, source, refresh } =
     useLiveNews(myGenres)
+  const {
+    scale: textScale,
+    canDecrease,
+    canIncrease,
+    decrease,
+    increase,
+  } = useTextScale()
 
   const myGenreSet = useMemo(() => new Set(myGenres), [myGenres])
 
@@ -128,6 +137,13 @@ export function Feed({ myGenres, onAddGenre, onRemoveGenre }: Props) {
           </div>
           <div className="top-actions">
             <div className="top-action-row">
+              <TextScaleControl
+                scale={textScale}
+                canDecrease={canDecrease}
+                canIncrease={canIncrease}
+                onDecrease={decrease}
+                onIncrease={increase}
+              />
               <button
                 type="button"
                 className={`refresh-btn${refreshing ? ' is-busy' : ''}`}
@@ -198,6 +214,7 @@ export function Feed({ myGenres, onAddGenre, onRemoveGenre }: Props) {
               isActive={index === activeIndex}
               liked={Boolean(liked[item.id])}
               saved={Boolean(saved[item.id])}
+              textScale={textScale}
               onLike={() =>
                 setLiked((prev) => ({ ...prev, [item.id]: !prev[item.id] }))
               }
