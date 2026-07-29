@@ -3,8 +3,13 @@ import { useEffect, useState, type RefObject } from 'react'
 export function useActiveSlide(
   containerRef: RefObject<HTMLElement | null>,
   itemCount: number,
+  resetKey: string | number = '',
 ) {
   const [activeIndex, setActiveIndex] = useState(0)
+
+  useEffect(() => {
+    setActiveIndex(0)
+  }, [resetKey])
 
   useEffect(() => {
     const root = containerRef.current
@@ -28,7 +33,7 @@ export function useActiveSlide(
 
     slides.forEach((slide) => observer.observe(slide))
     return () => observer.disconnect()
-  }, [containerRef, itemCount])
+  }, [containerRef, itemCount, resetKey])
 
   return activeIndex
 }

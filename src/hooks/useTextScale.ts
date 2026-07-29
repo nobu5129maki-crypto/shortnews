@@ -9,7 +9,7 @@ export type TextScale = (typeof TEXT_SCALE_STEPS)[number]
 
 const DEFAULT_SCALE: TextScale = 1.15
 
-function clampScale(value: number): TextScale {
+function nearestStep(value: number): TextScale {
   let best: TextScale = DEFAULT_SCALE
   let bestDiff = Number.POSITIVE_INFINITY
   for (const step of TEXT_SCALE_STEPS) {
@@ -22,25 +22,31 @@ function clampScale(value: number): TextScale {
   return best
 }
 
+function stepIndex(scale: number): number {
+  const nearest = nearestStep(scale)
+  return TEXT_SCALE_STEPS.indexOf(nearest)
+}
+
 function readScale(): TextScale {
   try {
     const raw = localStorage.getItem(STORAGE_KEY)
     if (!raw) return DEFAULT_SCALE
     const parsed = Number(raw)
     if (!Number.isFinite(parsed)) return DEFAULT_SCALE
-    return clampScale(parsed)
+    return nearestStep(parsed)
   } catch {
     return DEFAULT_SCALE
   }
 }
 
 export function useTextScale() {
-  const [ready, setReady] = useState(false)
-  const [scale, setScale] = useState<TextScale>(DEFAULT_SCALE)
+  const [scale, setScale] = useState<TextScale>(() => {
+    if (typeof window === 'undefined') return DEFAULT_SCALE
+    return readScale()
+  })
 
   useEffect(() => {
     setScale(readScale())
-    setReady(true)
   }, [])
 
   const persist = useCallback((next: TextScale) => {
@@ -52,27 +58,46 @@ export function useTextScale() {
     }
   }, [])
 
-  const canDecrease = scale > TEXT_SCALE_STEPS[0]
-  const canIncrease = scale < TEXT_SCALE_STEPS[TEXT_SCALE_STEPS.length - 1]
+  const index = stepIndex(scale)
+  const canDecrease = index > 0
+  const canIncrease = index >= 0 && index < TEXT_SCALE_STEPS.length - 1
 
   const decrease = useCallback(() => {
-    const index = TEXT_SCALE_STEPS.indexOf(scale)
-    if (index <= 0) return
-    persist(TEXT_SCALE_STEPS[index - 1])
-  }, [persist, scale])
+    setScale((current) => {
+      const currentIndex = stepIndex(current)
+      if (currentIndex <= 0) return nearestStep(current)
+      const next = TEXT_SCALE_STEPS[currentIndex - 1]
+      try {
+        localStorage.setItem(STORAGE_KEY, String(next))
+      } catch {
+        /* ignore */
+      }
+      return next
+    })
+  }, [])
 
   const increase = useCallback(() => {
-    const index = TEXT_SCALE_STEPS.indexOf(scale)
-    if (index < 0 || index >= TEXT_SCALE_STEPS.length - 1) return
-    persist(TEXT_SCALE_STEPS[index + 1])
-  }, [persist, scale])
+    setScale((current) => {
+      const currentIndex = stepIndex(current)
+      if (currentIndex < 0 || currentIndex >= TEXT_SCALE_STEPS.length - 1) {
+        return nearestStep(current)
+      }
+      const next = TEXT_SCALE_STEPS[currentIndex + 1]
+      try {
+        localStorage.setItem(STORAGE_KEY, String(next))
+      } catch {
+        /* ignore */
+      }
+      return next
+    })
+  }, [])
 
   return {
-    ready,
     scale,
     canDecrease,
     canIncrease,
     decrease,
     increase,
+    persist,
   }
 }

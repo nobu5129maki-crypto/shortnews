@@ -14,7 +14,10 @@ export function GenreBar({ genres, active, onChange }: Props) {
         role="tab"
         aria-selected={active === 'mine'}
         className={`genre-chip${active === 'mine' ? ' is-active' : ''}`}
-        onClick={() => onChange('mine')}
+        onClick={(event) => {
+          event.preventDefault()
+          onChange('mine')
+        }}
       >
         マイ
       </button>
@@ -27,7 +30,10 @@ export function GenreBar({ genres, active, onChange }: Props) {
             role="tab"
             aria-selected={isActive}
             className={`genre-chip${isActive ? ' is-active' : ''}`}
-            onClick={() => onChange(genre.id)}
+            onClick={(event) => {
+              event.preventDefault()
+              onChange(genre.id)
+            }}
           >
             {genre.label}
           </button>

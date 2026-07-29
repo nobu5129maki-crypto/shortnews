@@ -21,34 +21,46 @@ export function useLiveNews(myGenres: GenreId[]): LiveNewsState {
   const [refreshing, setRefreshing] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [source, setSource] = useState<'live' | 'fallback'>('fallback')
-  const inFlight = useRef(false)
+  const requestId = useRef(0)
+  const abortRef = useRef<AbortController | null>(null)
   const hasLive = useRef(false)
   const genresKey = myGenres.slice().sort().join('\n')
 
   const refresh = useCallback(async () => {
     const selected = genresKey ? genresKey.split('\n').filter(Boolean) : []
     if (selected.length === 0) {
+      abortRef.current?.abort()
+      abortRef.current = null
+      requestId.current += 1
       setItems([])
       setUpdatedAt(null)
       setLoading(false)
       setRefreshing(false)
       setError(null)
       setSource('live')
+      hasLive.current = false
       return
     }
 
-    if (inFlight.current) return
-    inFlight.current = true
+    abortRef.current?.abort()
+    const controller = new AbortController()
+    abortRef.current = controller
+    const currentRequest = ++requestId.current
+
     setRefreshing(true)
     try {
-      const params = new URLSearchParams({ t: String(Date.now()) })
+      const params = new URLSearchParams()
       for (const genre of selected) params.append('g', genre)
+      // Stable query (no Date.now) so SW/CDN can key by genre set; bypass HTTP cache.
       const response = await fetch(`/api/news?${params}`, {
         headers: { Accept: 'application/json' },
+        cache: 'no-store',
+        signal: controller.signal,
       })
       if (!response.ok) throw new Error(`HTTP ${response.status}`)
       const data = (await response.json()) as NewsApiResponse
       if (!Array.isArray(data.items)) throw new Error('invalid news')
+      if (currentRequest !== requestId.current) return
 
       setItems(data.items)
       setUpdatedAt(data.updatedAt)
@@ -56,6 +68,9 @@ export function useLiveNews(myGenres: GenreId[]): LiveNewsState {
       setError(null)
       hasLive.current = true
     } catch (err) {
+      if (controller.signal.aborted || currentRequest !== requestId.current) {
+        return
+      }
       console.error(err)
       setError('最新ニュースを取得できませんでした。再試行できます。')
       if (!hasLive.current) {
@@ -64,15 +79,17 @@ export function useLiveNews(myGenres: GenreId[]): LiveNewsState {
         setSource('fallback')
       }
     } finally {
-      setLoading(false)
-      setRefreshing(false)
-      inFlight.current = false
+      if (currentRequest === requestId.current) {
+        setLoading(false)
+        setRefreshing(false)
+      }
     }
   }, [genresKey])
 
   useEffect(() => {
     hasLive.current = false
     setLoading(true)
+    setItems([])
     void refresh()
     const timer = window.setInterval(() => {
       void refresh()
@@ -88,6 +105,7 @@ export function useLiveNews(myGenres: GenreId[]): LiveNewsState {
       window.clearInterval(timer)
       document.removeEventListener('visibilitychange', onVisible)
       window.removeEventListener('online', onVisible)
+      abortRef.current?.abort()
     }
   }, [refresh])
 

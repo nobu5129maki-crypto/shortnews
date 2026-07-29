@@ -907,28 +907,51 @@ function balanceByGenre(
     .slice(0, dynamicTotal)
 }
 
-function feedsForGenre(id: GenreId): FeedSource[] {
+function feedsForGenre(id: GenreId, compact = false): FeedSource[] {
   if (isSearchGenre(id)) {
     const query = labelFromGenreId(id)
     const encoded = encodeURIComponent(query)
-    return [
+    const primary: FeedSource[] = [
       {
         genre: id,
         url: `https://news.google.com/rss/search?q=${encoded}&hl=ja&gl=JP&ceid=JP:ja`,
         label: `Google ニュース · ${query}`,
-        limit: 8,
-      },
-      {
-        genre: id,
-        url: `https://news.google.com/rss/search?q=${encoded}&hl=en&gl=US&ceid=US:en`,
-        label: `Google News World · ${query}`,
-        limit: 8,
+        limit: compact ? 10 : 8,
       },
       {
         genre: id,
         url: `https://www.bing.com/news/search?q=${encoded}&format=RSS&mkt=ja-JP`,
         label: `Bing ニュース · ${query}`,
-        limit: 6,
+        limit: compact ? 8 : 6,
+      },
+    ]
+
+    if (compact) {
+      // 複数ジャンル時はタイムアウト回避のため主要ソースに絞る
+      return [
+        ...primary,
+        {
+          genre: id,
+          url: `https://news.google.com/rss/search?q=${encoded}&hl=en&gl=US&ceid=US:en`,
+          label: `Google News World · ${query}`,
+          limit: 6,
+        },
+        ...SEARCH_MEDIA.slice(0, 4).map((feed) => ({
+          ...feed,
+          genre: id,
+          query,
+          limit: Math.min(feed.limit ?? 12, 4),
+        })),
+      ]
+    }
+
+    return [
+      ...primary,
+      {
+        genre: id,
+        url: `https://news.google.com/rss/search?q=${encoded}&hl=en&gl=US&ceid=US:en`,
+        label: `Google News World · ${query}`,
+        limit: 8,
       },
       {
         genre: id,
@@ -994,14 +1017,17 @@ export async function fetchLatestNews(
 ): Promise<NewsItem[]> {
   if (genreIds && genreIds.length === 0) return []
 
+  const compact = Boolean(genreIds && genreIds.length > 1)
   const feeds =
     genreIds && genreIds.length > 0
-      ? genreIds.flatMap((id) => feedsForGenre(id))
+      ? genreIds.flatMap((id) => feedsForGenre(id, compact))
       : FEEDS
 
   if (feeds.length === 0) return []
 
-  const settled = await mapSettled(feeds, 10, (feed) => fetchFeed(feed))
+  const settled = await mapSettled(feeds, compact ? 8 : 10, (feed) =>
+    fetchFeed(feed),
+  )
   const collected: NewsItem[] = []
   const failures: string[] = []
 

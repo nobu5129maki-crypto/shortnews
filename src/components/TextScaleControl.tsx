@@ -20,7 +20,11 @@ export function TextScaleControl({
       <button
         type="button"
         className="text-scale-btn"
-        onClick={onDecrease}
+        onClick={(event) => {
+          event.preventDefault()
+          event.stopPropagation()
+          onDecrease()
+        }}
         disabled={!canDecrease}
         aria-label="文字を小さく"
       >
@@ -32,7 +36,11 @@ export function TextScaleControl({
       <button
         type="button"
         className="text-scale-btn is-large"
-        onClick={onIncrease}
+        onClick={(event) => {
+          event.preventDefault()
+          event.stopPropagation()
+          onIncrease()
+        }}
         disabled={!canIncrease}
         aria-label="文字を大きく"
       >

@@ -22,7 +22,7 @@ export default async function handler(request: Request): Promise<Response> {
     }
     return Response.json(body, {
       headers: {
-        'Cache-Control': 's-maxage=90, stale-while-revalidate=300',
+        'Cache-Control': 'private, no-store',
         'Access-Control-Allow-Origin': '*',
       },
     })

@@ -47,7 +47,7 @@ export function Feed({ myGenres, onAddGenre, onRemoveGenre }: Props) {
     return liveItems.filter((item) => item.genre === tab)
   }, [tab, myGenreSet, liveItems, myGenres.length])
 
-  const activeIndex = useActiveSlide(feedRef, items.length)
+  const activeIndex = useActiveSlide(feedRef, items.length, `${tab}:${items.length}`)
 
   useEffect(() => {
     if (tab !== 'mine' && !myGenreSet.has(tab)) {
@@ -58,8 +58,8 @@ export function Feed({ myGenres, onAddGenre, onRemoveGenre }: Props) {
   useEffect(() => {
     const node = feedRef.current
     if (!node) return
-    node.scrollTo({ top: 0 })
-  }, [tab, myGenres])
+    node.scrollTo({ top: 0, behavior: 'auto' })
+  }, [tab, myGenres, items.length])
 
   useEffect(() => {
     if (!showHint) return
@@ -125,7 +125,11 @@ export function Feed({ myGenres, onAddGenre, onRemoveGenre }: Props) {
   }
 
   return (
-    <div className="app-shell">
+    <div
+      className="app-shell"
+      style={{ ['--slide-text-scale' as string]: String(textScale) }}
+      data-text-scale={Math.round(textScale * 100)}
+    >
       <header className="chrome">
         <div className="chrome-row">
           <div className="brand-block">
@@ -185,6 +189,7 @@ export function Feed({ myGenres, onAddGenre, onRemoveGenre }: Props) {
 
       <div
         ref={feedRef}
+        key={`feed-${tab}`}
         className={`feed${feedLocked ? ' is-static' : ''}`}
         aria-label="マイニュースフィード"
       >
@@ -214,7 +219,6 @@ export function Feed({ myGenres, onAddGenre, onRemoveGenre }: Props) {
               isActive={index === activeIndex}
               liked={Boolean(liked[item.id])}
               saved={Boolean(saved[item.id])}
-              textScale={textScale}
               onLike={() =>
                 setLiked((prev) => ({ ...prev, [item.id]: !prev[item.id] }))
               }
