@@ -78,15 +78,20 @@ export function isRelevantToGenre(
   if (isSearchGenre(genre)) {
     const query = labelFromGenreId(genre).trim()
     if (!query) return true
-    if (title.includes(query) || description.includes(query)) return true
+    const normalizedTitle = title.toLowerCase()
+    const normalizedQuery = query.toLowerCase()
+    if (normalizedTitle.includes(normalizedQuery)) return true
+
     const tokens = query
       .split(/[\s　・/｜|]+/)
       .map((token) => token.trim())
       .filter((token) => token.length >= 2)
-    if (tokens.length === 0) return false
-    // タイトルに主要語が1つ以上、または本文に全トークン
-    if (tokens.some((token) => title.includes(token))) return true
-    return tokens.every((token) => text.includes(token))
+    if (tokens.length === 0) {
+      // 1文字クエリなどは本文一致も許可しない（ノイズが多い）
+      return description.toLowerCase().includes(normalizedQuery)
+    }
+    // キーワードニュースのみ: タイトルに主要語が1つ以上必要
+    return tokens.some((token) => title.includes(token))
   }
 
   const rule = RULES[genre as BuiltinGenreId]
