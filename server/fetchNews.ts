@@ -6,7 +6,7 @@ import type {
 } from './types.js'
 import { isSearchGenre, labelFromGenreId } from './types.js'
 import { enrichArticleBody } from './enrichArticle.js'
-import { isRelevantToGenre } from './genreRelevance.js'
+import { isRelevantToGenre, titleMatchesSearchQuery } from './genreRelevance.js'
 import { cleanDetailText, isBoilerplateDetail, isThinDetail } from './textClean.js'
 import { translateToJapanese } from './translate.js'
 
@@ -763,18 +763,10 @@ async function toNewsItem(
     return null
   }
 
-  // 検索キーワードはタイトル一致を必須にして無関係記事を落とす
+  // 検索キーワードはタイトル一致を必須（詳細文だけの一致は不可）
   if (isSearchGenre(genre)) {
     const query = labelFromGenreId(genre).trim()
-    const haystack = `${item.title}\n${detail}`
-    if (query && !haystack.toLowerCase().includes(query.toLowerCase())) {
-      const tokens = query
-        .split(/[\s　・/｜|]+/)
-        .map((token) => token.trim())
-        .filter((token) => token.length >= 2)
-      const titleHit = tokens.some((token) => item.title.includes(token))
-      if (!titleHit) return null
-    }
+    if (query && !titleMatchesSearchQuery(item.title, query)) return null
   }
 
   const summary = buildSummary(detail)
@@ -1088,9 +1080,22 @@ export async function fetchLatestNews(
   const balanced = balanceByGenre(dedupe(filtered))
   const localized = await mapSettled(balanced, 4, localizeNewsItem)
 
-  return localized.map((result, index) =>
+  const results = localized.map((result, index) =>
     result.status === 'fulfilled' ? result.value : balanced[index],
   )
+
+  // 翻訳後もキーワード適合を再確認（英語タイトル経由の誤通過を防ぐ）
+  if (genreIds && genreIds.length > 0) {
+    return results.filter((item) => {
+      if (!genreIds.includes(item.genre)) return false
+      if (!isSearchGenre(item.genre)) {
+        return isRelevantToGenre(item.genre, item.title, item.detail)
+      }
+      return titleMatchesSearchQuery(item.title, labelFromGenreId(item.genre))
+    })
+  }
+
+  return results
 }
 
 export function parseGenreQuery(value: string | null): GenreId[] | undefined {

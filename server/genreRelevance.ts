@@ -67,6 +67,46 @@ function scoreMatches(re: RegExp, text: string): number {
   return (text.match(global) ?? []).length
 }
 
+function escapeRegExp(value: string): string {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+}
+
+function isAsciiKeyword(value: string): boolean {
+  return /^[A-Za-z0-9][A-Za-z0-9+._-]*$/.test(value)
+}
+
+/** キーワードがタイトル等に本当に含まれるか（AI→air 誤爆を防ぐ） */
+export function textHasKeyword(text: string, keyword: string): boolean {
+  const needle = keyword.trim()
+  if (!needle || !text) return false
+
+  // 日本語・マルチバイトはそのまま部分一致
+  if (!isAsciiKeyword(needle)) {
+    return text.includes(needle)
+  }
+
+  const escaped = escapeRegExp(needle)
+  // 単語境界、または OpenAI のような CamelCase 末尾の略語
+  const pattern = new RegExp(
+    `(?:^|[^A-Za-z0-9])${escaped}(?=[^A-Za-z0-9]|$)|(?<=[a-z])${escaped}(?=[^a-z]|$)`,
+    'i',
+  )
+  return pattern.test(text)
+}
+
+export function titleMatchesSearchQuery(title: string, query: string): boolean {
+  const q = query.trim()
+  if (!q) return true
+  if (textHasKeyword(title, q)) return true
+
+  const tokens = q
+    .split(/[\s　・/｜|]+/)
+    .map((token) => token.trim())
+    .filter((token) => token.length >= 2)
+  if (tokens.length === 0) return false
+  return tokens.some((token) => textHasKeyword(title, token))
+}
+
 export function isRelevantToGenre(
   genre: GenreId,
   title: string,
@@ -78,20 +118,8 @@ export function isRelevantToGenre(
   if (isSearchGenre(genre)) {
     const query = labelFromGenreId(genre).trim()
     if (!query) return true
-    const normalizedTitle = title.toLowerCase()
-    const normalizedQuery = query.toLowerCase()
-    if (normalizedTitle.includes(normalizedQuery)) return true
-
-    const tokens = query
-      .split(/[\s　・/｜|]+/)
-      .map((token) => token.trim())
-      .filter((token) => token.length >= 2)
-    if (tokens.length === 0) {
-      // 1文字クエリなどは本文一致も許可しない（ノイズが多い）
-      return description.toLowerCase().includes(normalizedQuery)
-    }
-    // キーワードニュースのみ: タイトルに主要語が1つ以上必要
-    return tokens.some((token) => title.includes(token))
+    // キーワードニュースのみ: タイトル一致を必須
+    return titleMatchesSearchQuery(title, query)
   }
 
   const rule = RULES[genre as BuiltinGenreId]
