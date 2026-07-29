@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type CSSProperties } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import type { NewsItem } from '../types'
 import { resolveGenre } from '../lib/genres'
 import { formatRelativeTime } from '../utils/format'
@@ -10,7 +10,6 @@ type Props = {
   isActive: boolean
   liked: boolean
   saved: boolean
-  textScale: number
   onLike: () => void
   onSave: () => void
 }
@@ -21,7 +20,6 @@ export function NewsSlide({
   isActive,
   liked,
   saved,
-  textScale,
   onLike,
   onSave,
 }: Props) {
@@ -154,10 +152,7 @@ export function NewsSlide({
         <span style={{ transform: `scaleX(${videoFailed ? (isActive ? 1 : 0) : progress})` }} />
       </div>
 
-      <div
-        className="slide-meta"
-        style={{ '--slide-text-scale': String(textScale) } as CSSProperties}
-      >
+      <div className="slide-meta">
         <div className="meta-top">
           <span className="genre-tag">{genreLabel}</span>
           <span className="meta-time">{formatRelativeTime(item.publishedAt)}</span>

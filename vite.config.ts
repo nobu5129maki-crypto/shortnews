@@ -68,18 +68,8 @@ export default defineConfig({
         runtimeCaching: [
           {
             urlPattern: ({ url }) => url.pathname.startsWith('/api/news'),
-            handler: 'NetworkFirst',
-            options: {
-              cacheName: 'myline-news-api',
-              networkTimeoutSeconds: 8,
-              expiration: {
-                maxEntries: 8,
-                maxAgeSeconds: 60 * 30,
-              },
-              cacheableResponse: {
-                statuses: [0, 200],
-              },
-            },
+            handler: 'NetworkOnly',
+            method: 'GET',
           },
           {
             urlPattern: /^https:\/\/fonts\.googleapis\.com\/.*/i,
