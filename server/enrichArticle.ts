@@ -1,4 +1,4 @@
-import { cleanDetailText } from './textClean.js'
+import { cleanDetailText, isBoilerplateDetail } from './textClean.js'
 
 const FETCH_HEADERS = {
   Accept: 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
@@ -15,6 +15,12 @@ function metaContent(html: string, property: string): string {
   return match?.[1] || match?.[2] || ''
 }
 
+function usableText(value: string): string {
+  const cleaned = cleanDetailText(value)
+  if (!cleaned || isBoilerplateDetail(cleaned)) return ''
+  return cleaned
+}
+
 function extractFromHtml(html: string): string {
   const article =
     html.match(/<article\b[^>]*>([\s\S]*?)<\/article>/i)?.[1] ||
@@ -25,7 +31,7 @@ function extractFromHtml(html: string): string {
 
   const source = article || html
   const paragraphs = [...source.matchAll(/<p\b[^>]*>([\s\S]*?)<\/p>/gi)]
-    .map((match) => cleanDetailText(match[1]))
+    .map((match) => usableText(match[1]))
     .filter((text) => text.length > 40)
     .slice(0, 24)
 
@@ -34,8 +40,8 @@ function extractFromHtml(html: string): string {
   }
 
   return (
-    cleanDetailText(metaContent(html, 'og:description')) ||
-    cleanDetailText(metaContent(html, 'description')) ||
+    usableText(metaContent(html, 'og:description')) ||
+    usableText(metaContent(html, 'description')) ||
     paragraphs[0] ||
     ''
   )
@@ -46,8 +52,9 @@ export async function enrichArticleBody(
   url: string | undefined,
   current: string,
 ): Promise<string> {
-  if (!url) return current
-  if (current.length >= 500) return current
+  const base = usableText(current)
+  if (!url) return base
+  if (base.length >= 500) return base
 
   try {
     const response = await fetch(url, {
@@ -55,18 +62,19 @@ export async function enrichArticleBody(
       redirect: 'follow',
       signal: AbortSignal.timeout(4500),
     })
-    if (!response.ok) return current
+    if (!response.ok) return base
     const contentType = response.headers.get('content-type') ?? ''
     if (!contentType.includes('html') && !contentType.includes('xml')) {
-      return current
+      return base
     }
     const html = await response.text()
     const extracted = extractFromHtml(html)
-    if (extracted.length > current.length + 40) {
+    if (!extracted) return base
+    if (extracted.length > base.length + 40) {
       return extracted.slice(0, 6000)
     }
   } catch (error) {
     console.warn('[enrich]', url, error)
   }
-  return current
+  return base
 }

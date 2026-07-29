@@ -7,7 +7,7 @@ import type {
 import { isSearchGenre, labelFromGenreId } from './types.js'
 import { enrichArticleBody } from './enrichArticle.js'
 import { isRelevantToGenre } from './genreRelevance.js'
-import { cleanDetailText } from './textClean.js'
+import { cleanDetailText, isBoilerplateDetail, isThinDetail } from './textClean.js'
 import { translateToJapanese } from './translate.js'
 
 export type { NewsApiResponse }
@@ -723,14 +723,16 @@ function buildSummary(description: string): string {
 }
 
 function buildKeyPoints(title: string, description: string): string[] {
-  const sentences = splitSentences(description)
-  const points = sentences.slice(0, 3)
-  if (points.length >= 2) return points.map((point) => point.replace(/。$/, ''))
-  return [
-    title,
-    description.slice(0, 48).replace(/。$/, ''),
-    '全文はスライド内で確認できます',
-  ]
+  const cleaned = cleanDetailText(description)
+  if (isBoilerplateDetail(cleaned) || isThinDetail(cleaned, title)) return []
+
+  const sentences = splitSentences(cleaned)
+    .map((point) => point.replace(/[。．]$/, '').trim())
+    .filter((point) => point.length >= 18)
+    .filter((point) => !isBoilerplateDetail(point))
+    .filter((point) => point !== title && !title.includes(point))
+
+  return sentences.slice(0, 3)
 }
 
 function postersFor(genre: GenreId): string[] {
@@ -745,26 +747,45 @@ async function toNewsItem(
   feedUrl = '',
 ): Promise<NewsItem | null> {
   const seed = hashId(item.link || item.title)
-  let description = cleanDetailText(item.description || item.title)
-  description = await enrichArticleBody(item.link, description)
+  let description = cleanDetailText(item.description || '')
+  if (isBoilerplateDetail(description)) description = ''
 
-  // 本文補完後にもう一度ジャンル適合を確認（組み込みジャンルのみ）
-  if (
-    !isSearchGenre(genre) &&
-    !isRelevantToGenre(genre, item.title, description, feedUrl)
-  ) {
+  const enriched = await enrichArticleBody(item.link, description)
+  description = cleanDetailText(enriched)
+  if (isBoilerplateDetail(description)) description = ''
+
+  // 本文が取れない場合はタイトルを詳細の代わりに使う（定型文は載せない）
+  const detail = description || cleanDetailText(item.title)
+  if (!detail || isBoilerplateDetail(detail)) return null
+
+  // ジャンル / キーワード適合（検索ジャンルも含む）
+  if (!isRelevantToGenre(genre, item.title, detail, feedUrl)) {
     return null
   }
 
-  const summary = buildSummary(description)
+  // 検索キーワードはタイトル一致を必須にして無関係記事を落とす
+  if (isSearchGenre(genre)) {
+    const query = labelFromGenreId(genre).trim()
+    const haystack = `${item.title}\n${detail}`
+    if (query && !haystack.toLowerCase().includes(query.toLowerCase())) {
+      const tokens = query
+        .split(/[\s　・/｜|]+/)
+        .map((token) => token.trim())
+        .filter((token) => token.length >= 2)
+      const titleHit = tokens.some((token) => item.title.includes(token))
+      if (!titleHit) return null
+    }
+  }
+
+  const summary = buildSummary(detail)
 
   return {
     id: `live-${seed.toString(16)}`,
     genre,
-    title: item.title,
+    title: cleanDetailText(item.title) || item.title,
     summary,
-    detail: description || item.title,
-    keyPoints: buildKeyPoints(item.title, description),
+    detail,
+    keyPoints: buildKeyPoints(item.title, detail),
     related: [],
     source: resolveSourceLabel(sourceLabel, item),
     publishedAt: toIso(item.pubDate),
@@ -777,17 +798,31 @@ async function toNewsItem(
 }
 
 async function localizeNewsItem(item: NewsItem): Promise<NewsItem> {
-  const [title, detail] = await Promise.all([
+  const [title, detailRaw] = await Promise.all([
     translateToJapanese(item.title),
     translateToJapanese(item.detail),
   ])
-  if (title === item.title && detail === item.detail) return item
+  const detail = cleanDetailText(detailRaw)
+  if (
+    (title === item.title && detail === item.detail) ||
+    isBoilerplateDetail(detail)
+  ) {
+    return {
+      ...item,
+      detail: isBoilerplateDetail(item.detail) ? item.title : item.detail,
+      keyPoints: buildKeyPoints(
+        item.title,
+        isBoilerplateDetail(item.detail) ? item.title : item.detail,
+      ),
+    }
+  }
+  const safeDetail = detail || title
   return {
     ...item,
     title,
-    detail,
-    summary: buildSummary(detail),
-    keyPoints: buildKeyPoints(title, detail),
+    detail: safeDetail,
+    summary: buildSummary(safeDetail),
+    keyPoints: buildKeyPoints(title, safeDetail),
   }
 }
 
