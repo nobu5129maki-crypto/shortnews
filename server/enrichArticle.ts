@@ -204,10 +204,11 @@ async function resolveViaBing(
 
   const latinBits = cleanedTitle.match(/[A-Za-z][A-Za-z0-9+._-]{1,}/g) ?? []
   const queries = [
-    cleanedTitle.slice(0, 72),
     latinBits.slice(0, 5).join(' '),
     latinBits.slice(0, 3).join(' '),
+    cleanedTitle.slice(0, 48),
   ].filter((query, index, all) => query.length >= 6 && all.indexOf(query) === index)
+    .slice(0, 2)
 
   for (const query of queries) {
     try {
@@ -219,7 +220,7 @@ async function resolveViaBing(
           Accept: 'application/rss+xml, application/xml, text/xml, */*',
           'User-Agent': FETCH_HEADERS['User-Agent'],
         },
-        signal: AbortSignal.timeout(4500),
+        signal: AbortSignal.timeout(2800),
       })
       if (!response.ok) continue
       const xml = await response.text()
@@ -272,7 +273,7 @@ async function fetchHtml(url: string): Promise<string> {
   const response = await fetch(url, {
     headers: FETCH_HEADERS,
     redirect: 'follow',
-    signal: AbortSignal.timeout(5500),
+    signal: AbortSignal.timeout(3500),
   })
   if (!response.ok) return ''
   const contentType = response.headers.get('content-type') ?? ''
@@ -291,7 +292,7 @@ async function fetchViaJina(url: string): Promise<string> {
         Accept: 'text/plain',
         'User-Agent': FETCH_HEADERS['User-Agent'],
       },
-      signal: AbortSignal.timeout(7000),
+      signal: AbortSignal.timeout(4500),
     })
     if (!response.ok) return ''
     const markdown = await response.text()
@@ -303,7 +304,7 @@ async function fetchViaJina(url: string): Promise<string> {
       .replace(/^Warning:.*$/gm, '')
     const usable = usableText(withoutMeta)
     if (!usable || usable.length < 80) return ''
-    return stripNoise(usable).slice(0, 6000)
+    return stripNoise(usable).slice(0, 4500)
   } catch (error) {
     console.warn('[jina]', url, error)
     return ''
@@ -349,7 +350,11 @@ export async function enrichArticleBody(
     }
   }
 
-  if ((!target || isGoogleNewsUrl(target)) && candidate) {
+  // Bing 説明で十分読める長さなら、重い HTML/Jina を省略（Edge タイムアウト回避）
+  if (candidate.length >= 260 && !looksTruncated(candidate)) {
+    return { detail: softTrimTruncation(candidate), resolvedUrl }
+  }
+  if (candidate.length >= 220 && (!target || isGoogleNewsUrl(target))) {
     return { detail: softTrimTruncation(candidate), resolvedUrl }
   }
 
@@ -361,14 +366,17 @@ export async function enrichArticleBody(
     const html = await fetchHtml(target)
     let extracted = html ? extractFromHtml(html) : ''
 
-    if (!extracted || extracted.length < 160 || looksTruncated(extracted)) {
+    // HTML で足りないときだけ Jina（時間のかかる経路）
+    if (
+      (!extracted || extracted.length < 180 || looksTruncated(extracted)) &&
+      candidate.length < 220
+    ) {
       const jina = await fetchViaJina(target)
       if (jina) {
         extracted = pickBestText([extracted, jina], title, extracted)
       }
     }
 
-    // Jina がサイト全体の雑多な文を返すことがあるのでタイトル関連度で選定
     const best = pickBestText([candidate, extracted], title, base)
     if (best && best.length > 40) {
       return {
