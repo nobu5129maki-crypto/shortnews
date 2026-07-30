@@ -6,6 +6,7 @@ import type { NewsApiResponse } from '../server/types.js'
 
 export const config = {
   runtime: 'edge',
+  maxDuration: 60,
 }
 
 export default async function handler(request: Request): Promise<Response> {

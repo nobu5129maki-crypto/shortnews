@@ -1081,6 +1081,13 @@ function postersFor(genre: GenreId): string[] {
   return DEFAULT_POSTERS
 }
 
+type FeedCandidate = {
+  item: RssItem
+  genre: GenreId
+  sourceLabel: string
+  feedUrl: string
+}
+
 async function toNewsItem(
   item: RssItem,
   genre: GenreId,
@@ -1160,13 +1167,15 @@ async function localizeNewsItem(item: NewsItem): Promise<NewsItem> {
   }
 }
 
-async function fetchFeed(source: FeedSource): Promise<NewsItem[]> {
+/** RSS だけ軽く取得し、本文補完前の候補を返す（多ソース向け） */
+async function fetchFeedCandidates(source: FeedSource): Promise<FeedCandidate[]> {
   const response = await fetch(source.url, {
     headers: {
       Accept:
         'application/rss+xml, application/atom+xml, application/xml, text/xml, */*',
       'User-Agent': 'MYLINE-NewsBot/1.0 (+https://shortnews-theta.vercel.app)',
     },
+    signal: AbortSignal.timeout(8000),
   })
   if (!response.ok) {
     throw new Error(`RSS ${source.label} failed: ${response.status}`)
@@ -1213,16 +1222,12 @@ async function fetchFeed(source: FeedSource): Promise<NewsItem[]> {
     })
   }
 
-  const settled = await mapSettled(filtered.slice(0, limit), 3, (item) =>
-    toNewsItem(item, source.genre, source.label, source.url),
-  )
-
-  return settled
-    .filter(
-      (result): result is PromiseFulfilledResult<NewsItem> =>
-        result.status === 'fulfilled' && result.value !== null,
-    )
-    .map((result) => result.value as NewsItem)
+  return filtered.slice(0, limit).map((item) => ({
+    item,
+    genre: source.genre,
+    sourceLabel: source.label,
+    feedUrl: source.url,
+  }))
 }
 
 function matchesQuery(item: RssItem, query: string): boolean {
@@ -1232,6 +1237,18 @@ function matchesQuery(item: RssItem, query: string): boolean {
     item.title,
     item.description,
   )
+}
+
+function dedupeCandidates(items: FeedCandidate[]): FeedCandidate[] {
+  const seen = new Set<string>()
+  const result: FeedCandidate[] = []
+  for (const candidate of items) {
+    const key = candidate.item.title.replace(/\s+/g, '')
+    if (seen.has(key)) continue
+    seen.add(key)
+    result.push(candidate)
+  }
+  return result
 }
 
 function dedupe(items: NewsItem[]): NewsItem[] {
@@ -1244,6 +1261,43 @@ function dedupe(items: NewsItem[]): NewsItem[] {
     result.push(item)
   }
   return result
+}
+
+function balanceCandidates(
+  items: FeedCandidate[],
+  perGenre = 36,
+  total = 240,
+): FeedCandidate[] {
+  const groups = new Map<GenreId, FeedCandidate[]>()
+  for (const item of items) {
+    const list = groups.get(item.genre) ?? []
+    list.push(item)
+    groups.set(item.genre, list)
+  }
+
+  const genreCount = Math.max(groups.size, 1)
+  const dynamicPerGenre =
+    genreCount <= 2 ? Math.max(perGenre, 90) : perGenre
+  const dynamicTotal =
+    genreCount <= 2 ? Math.max(total, 140) : total
+
+  const picked: FeedCandidate[] = []
+  for (const list of groups.values()) {
+    list.sort(
+      (a, b) =>
+        Date.parse(b.item.pubDate || '') - Date.parse(a.item.pubDate || '') ||
+        0,
+    )
+    picked.push(...list.slice(0, dynamicPerGenre))
+  }
+
+  return picked
+    .sort(
+      (a, b) =>
+        Date.parse(b.item.pubDate || '') - Date.parse(a.item.pubDate || '') ||
+        0,
+    )
+    .slice(0, dynamicTotal)
 }
 
 function balanceByGenre(
@@ -1451,10 +1505,11 @@ export async function fetchLatestNews(
 
   if (feeds.length === 0) return []
 
-  const settled = await mapSettled(feeds, compact ? 8 : 10, (feed) =>
-    fetchFeed(feed),
+  // 1) 多ソースから候補だけ高速収集（本文補完は後段）
+  const settled = await mapSettled(feeds, compact ? 10 : 14, (feed) =>
+    fetchFeedCandidates(feed),
   )
-  const collected: NewsItem[] = []
+  const collected: FeedCandidate[] = []
   const failures: string[] = []
 
   for (let i = 0; i < settled.length; i += 1) {
@@ -1471,12 +1526,31 @@ export async function fetchLatestNews(
     console.warn('[news] failed feeds:', failures.join(', '))
   }
 
-  const filtered =
+  const scoped =
     genreIds && genreIds.length > 0
       ? collected.filter((item) => genreIds.includes(item.genre))
       : collected
 
-  const balanced = balanceByGenre(dedupe(filtered))
+  const shortlisted = balanceCandidates(dedupeCandidates(scoped))
+
+  // 2) 採用候補だけ本文補完（Edge タイムアウト回避）
+  const enriched = await mapSettled(shortlisted, compact ? 4 : 5, (candidate) =>
+    toNewsItem(
+      candidate.item,
+      candidate.genre,
+      candidate.sourceLabel,
+      candidate.feedUrl,
+    ),
+  )
+
+  const newsItems = enriched
+    .filter(
+      (result): result is PromiseFulfilledResult<NewsItem> =>
+        result.status === 'fulfilled' && result.value !== null,
+    )
+    .map((result) => result.value as NewsItem)
+
+  const balanced = balanceByGenre(dedupe(newsItems))
   const localized = await mapSettled(balanced, 4, localizeNewsItem)
 
   const results = localized.map((result, index) =>
