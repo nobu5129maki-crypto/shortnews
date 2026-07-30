@@ -59,7 +59,7 @@ const RULES: Record<BuiltinGenreId, GenreRule> = {
 
 /** フィード自体が専門的でキーワードが薄くても許す */
 const SPECIALIST_FEED =
-  /aiplus|soccer-king|baseballking|nature\.com|science\.org|politico\.com|itmedia\.co\.jp\/rss\/2\.0\/aiplus|bloomberg\.com\/markets/i
+  /aiplus|soccer-king|baseballking|nature\.com|science\.org|sciencedaily\.com|politico\.com|itmedia\.co\.jp\/rss\/2\.0\/aiplus|bloomberg\.com\/markets|espn\.com|bbci\.co\.uk\/sport|skysports\.com|variety\.com|hollywoodreporter\.com|deadline\.com|rollingstone\.com|techcrunch\.com\/category\/artificial-intelligence|theverge\.com\/rss\/ai-artificial-intelligence|wired\.com\/feed\/tag\/ai|venturebeat\.com\/category\/ai|technologyreview\.com|arstechnica\.com|lifehacker\.jp|roomie\.jp|space\.com|newscientist\.com|ft\.com|economist\.com/i
 
 function scoreMatches(re: RegExp, text: string): number {
   const flags = re.flags.includes('g') ? re.flags : `${re.flags}g`
