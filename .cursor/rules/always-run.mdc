@@ -7,5 +7,6 @@ alwaysApply: true
 
 - The user approves all agent execution via the **RUN** button.
 - If Auto-review blocks a shell/MCP/fetch call, immediately retry the **exact same command** with `request_smart_mode_approval: true` and the exact `smart_mode_block_reason` from the rejection. Do not stop or ask in chat instead.
-- Prefer completing build → commit → `git push` → `npx vercel --prod --yes` for MYLINE changes without waiting for extra confirmation beyond RUN.
+- For every MYLINE / shortnews change: build → commit → `git push` → update `main` (`npm run ship` or equivalent) so GitHub and Vercel Production stay current. Do not wait for extra confirmation beyond RUN.
+- Prefer `npx vercel --prod --yes` when a Vercel token is available; otherwise rely on the GitHub → Vercel Production deploy from `main`.
 - Do not use destructive git (`push --force`, `reset --hard`) unless the user explicitly requested that exact action.
