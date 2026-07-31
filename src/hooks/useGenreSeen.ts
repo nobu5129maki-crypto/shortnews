@@ -1,10 +1,14 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import type { GenreId, NewsItem } from '../types'
 
-const SEEN_KEY = 'brief.genreSeen.v1'
-const MAX_IDS = 80
+const SEEN_KEY = 'brief.genreSeen.v2'
+const MAX_IDS = 120
 
 type SeenMap = Record<string, string[]>
+
+function isLiveArticleId(id: string): boolean {
+  return id.startsWith('live-')
+}
 
 function readSeen(): SeenMap {
   try {
@@ -54,10 +58,12 @@ export function useGenreSeen(myGenres: GenreId[], items: NewsItem[]) {
     setReady(true)
   }, [])
 
-  const idsByGenre = useMemo(() => {
+  /** ジャンルごとの本番記事IDのみ（デモは新着判定に使わない） */
+  const liveIdsByGenre = useMemo(() => {
     const map = new Map<GenreId, string[]>()
     for (const item of items) {
       if (!myGenres.includes(item.genre)) continue
+      if (!isLiveArticleId(item.id)) continue
       const list = map.get(item.genre) ?? []
       list.push(item.id)
       map.set(item.genre, list)
@@ -65,7 +71,7 @@ export function useGenreSeen(myGenres: GenreId[], items: NewsItem[]) {
     return map
   }, [items, myGenres])
 
-  // First sight of a genre baselines current IDs so existing articles are not all "new".
+  // 本番記事が揃ってからベースライン（空配列で「全部新着」にしない）
   useEffect(() => {
     if (!ready) return
     setSeen((prev) => {
@@ -73,7 +79,8 @@ export function useGenreSeen(myGenres: GenreId[], items: NewsItem[]) {
       const next = { ...prev }
       for (const genreId of myGenres) {
         if (Object.prototype.hasOwnProperty.call(next, genreId)) continue
-        const ids = idsByGenre.get(genreId) ?? []
+        const ids = liveIdsByGenre.get(genreId) ?? []
+        if (ids.length === 0) continue
         next[genreId] = ids.slice(0, MAX_IDS)
         changed = true
       }
@@ -81,23 +88,36 @@ export function useGenreSeen(myGenres: GenreId[], items: NewsItem[]) {
       persistSeen(next)
       return next
     })
-  }, [ready, myGenres, idsByGenre])
+  }, [ready, myGenres, liveIdsByGenre])
 
   const newGenreIds = useMemo(() => {
     const set = new Set<GenreId>()
     if (!ready) return set
     for (const genreId of myGenres) {
+      const ids = liveIdsByGenre.get(genreId) ?? []
+      // 表示できる本番記事が無いジャンルにドットを付けない
+      if (ids.length === 0) continue
       if (!Object.prototype.hasOwnProperty.call(seen, genreId)) continue
       const known = new Set(seen[genreId] ?? [])
-      const ids = idsByGenre.get(genreId) ?? []
       if (ids.some((id) => !known.has(id))) set.add(genreId)
     }
     return set
-  }, [ready, myGenres, idsByGenre, seen])
+  }, [ready, myGenres, liveIdsByGenre, seen])
+
+  const markItemSeen = useCallback((genreId: GenreId, itemId: string) => {
+    if (!itemId.startsWith('live-')) return
+    setSeen((prev) => {
+      if ((prev[genreId] ?? []).includes(itemId)) return prev
+      const next = { ...prev, [genreId]: mergeIds(prev[genreId], [itemId]) }
+      persistSeen(next)
+      return next
+    })
+  }, [])
 
   const markGenreSeen = useCallback(
     (genreId: GenreId) => {
-      const ids = idsByGenre.get(genreId) ?? []
+      const ids = liveIdsByGenre.get(genreId) ?? []
+      if (ids.length === 0) return
       setSeen((prev) => {
         const merged = mergeIds(prev[genreId], ids)
         const prevIds = prev[genreId] ?? []
@@ -113,11 +133,27 @@ export function useGenreSeen(myGenres: GenreId[], items: NewsItem[]) {
         return next
       })
     },
-    [idsByGenre],
+    [liveIdsByGenre],
   )
+
+  const unseenIdsByGenre = useMemo(() => {
+    const map = new Map<GenreId, string[]>()
+    if (!ready) return map
+    for (const genreId of myGenres) {
+      const ids = liveIdsByGenre.get(genreId) ?? []
+      if (ids.length === 0) continue
+      if (!Object.prototype.hasOwnProperty.call(seen, genreId)) continue
+      const known = new Set(seen[genreId] ?? [])
+      const unseen = ids.filter((id) => !known.has(id))
+      if (unseen.length > 0) map.set(genreId, unseen)
+    }
+    return map
+  }, [ready, myGenres, liveIdsByGenre, seen])
 
   return {
     newGenreIds,
+    unseenIdsByGenre,
+    markItemSeen,
     markGenreSeen,
   }
 }
