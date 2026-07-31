@@ -1,16 +1,20 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import type { FeedTabId, GenreId } from '../types'
+import type { GenreId, NewsItem } from '../types'
 import { resolveGenres } from '../lib/genres'
 import { useActiveSlide } from '../hooks/useActiveSlide'
+import { useGenreSeen } from '../hooks/useGenreSeen'
 import { useLiveNews } from '../hooks/useLiveNews'
 import { formatClock } from '../utils/format'
 import { GenreBar } from './GenreBar'
 import { GenreEditor } from './GenreEditor'
 import { GenreSearch } from './GenreSearch'
+import { LaneContinue } from './LaneContinue'
 import { NewsSlide } from './NewsSlide'
 import { SwipeHint } from './SwipeHint'
 import { TextScaleControl } from './TextScaleControl'
 import { useTextScale } from '../hooks/useTextScale'
+
+const MIN_SWIPE_ITEMS = 6
 
 type Props = {
   myGenres: GenreId[]
@@ -18,9 +22,27 @@ type Props = {
   onRemoveGenre: (id: GenreId) => void
 }
 
+function buildFeedItems(
+  tab: GenreId,
+  liveItems: NewsItem[],
+  myGenreSet: Set<GenreId>,
+): NewsItem[] {
+  const primary = liveItems.filter((item) => item.genre === tab)
+  if (primary.length >= MIN_SWIPE_ITEMS) return primary
+
+  const extras = liveItems.filter(
+    (item) => item.genre !== tab && myGenreSet.has(item.genre),
+  )
+  if (extras.length === 0) return primary
+
+  const needed = Math.max(MIN_SWIPE_ITEMS - primary.length, 0)
+  const topped = needed > 0 ? extras.slice(0, Math.max(needed, 3)) : []
+  return [...primary, ...topped]
+}
+
 export function Feed({ myGenres, onAddGenre, onRemoveGenre }: Props) {
   const feedRef = useRef<HTMLDivElement>(null)
-  const [tab, setTab] = useState<FeedTabId>('mine')
+  const [tab, setTab] = useState<GenreId | null>(null)
   const [liked, setLiked] = useState<Record<string, boolean>>({})
   const [saved, setSaved] = useState<Record<string, boolean>>({})
   const [showHint, setShowHint] = useState(true)
@@ -36,30 +58,62 @@ export function Feed({ myGenres, onAddGenre, onRemoveGenre }: Props) {
   } = useTextScale()
 
   const myGenreSet = useMemo(() => new Set(myGenres), [myGenres])
-
   const barGenres = useMemo(() => resolveGenres(myGenres), [myGenres])
+  const activeTab = tab && myGenreSet.has(tab) ? tab : myGenres[0] ?? null
+
+  const { newGenreIds, markGenreSeen } = useGenreSeen(myGenres, liveItems)
 
   const items = useMemo(() => {
-    if (myGenres.length === 0) return []
-    if (tab === 'mine') {
-      return liveItems.filter((item) => myGenreSet.has(item.genre))
-    }
-    return liveItems.filter((item) => item.genre === tab)
-  }, [tab, myGenreSet, liveItems, myGenres.length])
+    if (!activeTab || myGenres.length === 0) return []
+    return buildFeedItems(activeTab, liveItems, myGenreSet)
+  }, [activeTab, myGenreSet, liveItems, myGenres.length])
 
-  const activeIndex = useActiveSlide(feedRef, items.length, `${tab}:${items.length}`)
+  const primaryCount = useMemo(() => {
+    if (!activeTab) return 0
+    return liveItems.filter((item) => item.genre === activeTab).length
+  }, [liveItems, activeTab])
+
+  const continueGenres = useMemo(() => {
+    if (!activeTab) return []
+    return barGenres
+      .filter((genre) => genre.id !== activeTab)
+      .map((genre) => ({
+        genre,
+        count: liveItems.filter((item) => item.genre === genre.id).length,
+        hasNew: newGenreIds.has(genre.id),
+      }))
+      .filter((entry) => entry.count > 0 || entry.hasNew)
+      .sort((a, b) => Number(b.hasNew) - Number(a.hasNew) || b.count - a.count)
+  }, [barGenres, activeTab, liveItems, newGenreIds])
+
+  const showContinue = Boolean(activeTab) && myGenres.length > 0 && !loading
+  const slideCount = items.length + (showContinue ? 1 : 0)
+  const activeIndex = useActiveSlide(
+    feedRef,
+    slideCount,
+    `${activeTab ?? 'none'}:${slideCount}`,
+  )
 
   useEffect(() => {
-    if (tab !== 'mine' && !myGenreSet.has(tab)) {
-      setTab('mine')
+    if (myGenres.length === 0) {
+      setTab(null)
+      return
     }
-  }, [tab, myGenreSet])
+    if (!tab || !myGenreSet.has(tab)) {
+      setTab(myGenres[0])
+    }
+  }, [tab, myGenreSet, myGenres])
+
+  useEffect(() => {
+    if (!activeTab) return
+    markGenreSeen(activeTab)
+  }, [activeTab, liveItems, markGenreSeen])
 
   useEffect(() => {
     const node = feedRef.current
     if (!node) return
     node.scrollTo({ top: 0, behavior: 'auto' })
-  }, [tab, myGenres, items.length])
+  }, [activeTab, myGenres, items.length])
 
   useEffect(() => {
     if (!showHint) return
@@ -83,7 +137,7 @@ export function Feed({ myGenres, onAddGenre, onRemoveGenre }: Props) {
     if (!node || feedLocked) return
 
     const goTo = (next: number) => {
-      const clamped = Math.max(0, Math.min(items.length - 1, next))
+      const clamped = Math.max(0, Math.min(slideCount - 1, next))
       const slide = node.querySelector<HTMLElement>(`[data-index="${clamped}"]`)
       slide?.scrollIntoView({ behavior: 'smooth', block: 'start' })
     }
@@ -117,12 +171,15 @@ export function Feed({ myGenres, onAddGenre, onRemoveGenre }: Props) {
 
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
-  }, [activeIndex, items.length, feedLocked])
+  }, [activeIndex, slideCount, feedLocked])
 
-  const onTabChange = (id: FeedTabId) => {
+  const onTabChange = (id: GenreId) => {
     setTab(id)
     setShowHint(true)
   }
+
+  const currentLabel =
+    barGenres.find((genre) => genre.id === activeTab)?.label ?? 'このジャンル'
 
   return (
     <div
@@ -182,22 +239,27 @@ export function Feed({ myGenres, onAddGenre, onRemoveGenre }: Props) {
           </span>
         </div>
 
-        {barGenres.length > 0 && (
-          <GenreBar genres={barGenres} active={tab} onChange={onTabChange} />
+        {barGenres.length > 0 && activeTab && (
+          <GenreBar
+            genres={barGenres}
+            active={activeTab}
+            newGenreIds={newGenreIds}
+            onChange={onTabChange}
+          />
         )}
       </header>
 
       <div
         ref={feedRef}
-        key={`feed-${tab}`}
+        key={`feed-${activeTab ?? 'empty'}`}
         className={`feed${feedLocked ? ' is-static' : ''}`}
-        aria-label="マイニュースフィード"
+        aria-label="ニュースフィード"
       >
         {myGenres.length === 0 ? (
           <div className="empty-state empty-state-search">
             <GenreSearch myGenres={myGenres} onAdd={onAddGenre} autofocus />
           </div>
-        ) : items.length === 0 ? (
+        ) : items.length === 0 && !showContinue ? (
           <div className="empty-state">
             <p>
               {loading
@@ -211,28 +273,40 @@ export function Feed({ myGenres, onAddGenre, onRemoveGenre }: Props) {
             )}
           </div>
         ) : (
-          items.map((item, index) => (
-            <NewsSlide
-              key={`${tab}-${item.id}`}
-              item={item}
-              index={index}
-              isActive={index === activeIndex}
-              liked={Boolean(liked[item.id])}
-              saved={Boolean(saved[item.id])}
-              onLike={() =>
-                setLiked((prev) => ({ ...prev, [item.id]: !prev[item.id] }))
-              }
-              onSave={() =>
-                setSaved((prev) => ({ ...prev, [item.id]: !prev[item.id] }))
-              }
-            />
-          ))
+          <>
+            {items.map((item, index) => (
+              <NewsSlide
+                key={`${activeTab}-${item.id}`}
+                item={item}
+                index={index}
+                isActive={index === activeIndex}
+                liked={Boolean(liked[item.id])}
+                saved={Boolean(saved[item.id])}
+                onLike={() =>
+                  setLiked((prev) => ({ ...prev, [item.id]: !prev[item.id] }))
+                }
+                onSave={() =>
+                  setSaved((prev) => ({ ...prev, [item.id]: !prev[item.id] }))
+                }
+              />
+            ))}
+            {showContinue && activeTab && (
+              <LaneContinue
+                index={items.length}
+                isActive={activeIndex === items.length}
+                currentLabel={currentLabel}
+                articleCount={primaryCount}
+                otherGenres={continueGenres}
+                onSelectGenre={onTabChange}
+                onRefresh={() => void refresh()}
+                refreshing={refreshing}
+              />
+            )}
+          </>
         )}
       </div>
 
-      <SwipeHint
-        visible={showHint && items.length > 1 && !editorOpen}
-      />
+      <SwipeHint visible={showHint && slideCount > 1 && !editorOpen} />
 
       <GenreEditor
         open={editorOpen}

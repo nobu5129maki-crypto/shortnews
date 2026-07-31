@@ -38,7 +38,7 @@ export function GenreEditor({
         <div className="editor-handle" aria-hidden="true" />
         <header className="editor-header">
           <div>
-            <h2 id="editor-title">マイジャンル</h2>
+            <h2 id="editor-title">ジャンル設定</h2>
           </div>
           <button type="button" className="editor-close" onClick={onClose} aria-label="閉じる">
             ×

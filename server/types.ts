@@ -12,7 +12,7 @@ export type BuiltinGenreId =
 /** Built-in or free-form search genre id (`search:...`) */
 export type GenreId = string
 
-export type FeedTabId = 'mine' | GenreId
+export type FeedTabId = GenreId
 
 export type Genre = {
   id: GenreId

@@ -331,7 +331,7 @@ button {
 
 .genre-chip {
   flex: 0 0 auto;
-  padding: 8px 12px;
+  padding: 10px 12px 8px;
   font-size: 0.82rem;
   font-weight: 600;
   color: rgba(255, 255, 255, 0.55);
@@ -364,6 +364,24 @@ button {
 
 .genre-chip:active {
   transform: scale(0.96);
+}
+
+.genre-new-dot {
+  position: absolute;
+  top: 4px;
+  left: 50%;
+  width: 7px;
+  height: 7px;
+  margin-left: -3.5px;
+  border-radius: 50%;
+  background: var(--accent);
+  box-shadow: 0 0 0 2px rgba(9, 14, 24, 0.85);
+  animation: pulse-dot 1.8s ease-out infinite;
+  pointer-events: none;
+}
+
+.genre-chip.has-new {
+  color: rgba(255, 255, 255, 0.82);
 }
 
 .feed {
@@ -778,6 +796,125 @@ button {
   100% {
     transform: scale(1);
   }
+}
+
+.lane-continue {
+  position: relative;
+  height: 100%;
+  min-height: 100%;
+  scroll-snap-align: start;
+  scroll-snap-stop: always;
+  display: grid;
+  place-items: center;
+  padding: 28px 20px calc(40px + var(--safe-bottom));
+  background:
+    radial-gradient(ellipse 70% 50% at 50% 18%, rgba(61, 255, 208, 0.12), transparent 70%),
+    linear-gradient(180deg, #0b1220 0%, #121a2b 55%, #0a101c 100%);
+}
+
+.lane-continue-inner {
+  width: min(100%, 360px);
+  display: grid;
+  gap: 14px;
+  justify-items: stretch;
+  animation: rise-in 420ms ease both;
+}
+
+.lane-continue-kicker {
+  margin: 0;
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  color: var(--lane);
+}
+
+.lane-continue-title {
+  margin: 0;
+  font-family: var(--font-brand);
+  font-size: 1.55rem;
+  font-weight: 600;
+  line-height: 1.35;
+  letter-spacing: -0.02em;
+  color: #fff;
+  text-wrap: balance;
+}
+
+.lane-continue-copy {
+  margin: 0;
+  font-size: 0.95rem;
+  line-height: 1.65;
+  color: rgba(238, 242, 247, 0.72);
+}
+
+.lane-continue-genres {
+  display: grid;
+  gap: 8px;
+  margin-top: 4px;
+}
+
+.lane-continue-chip {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  width: 100%;
+  padding: 14px 16px;
+  text-align: left;
+  color: #fff;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  transition: background 160ms ease, border-color 160ms ease, transform 160ms ease;
+}
+
+.lane-continue-chip.has-new {
+  border-color: rgba(255, 159, 67, 0.4);
+}
+
+.lane-continue-chip .genre-new-dot {
+  top: 10px;
+  left: 10px;
+  margin-left: 0;
+}
+
+.lane-continue-chip:active {
+  transform: scale(0.98);
+  background: rgba(61, 255, 208, 0.08);
+}
+
+.lane-continue-chip-label {
+  font-size: 1rem;
+  font-weight: 700;
+}
+
+.lane-continue-chip.has-new .lane-continue-chip-label {
+  padding-left: 14px;
+}
+
+.lane-continue-chip-count {
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: rgba(238, 242, 247, 0.55);
+}
+
+.lane-continue-refresh {
+  margin-top: 6px;
+  padding: 14px 18px;
+  font-size: 0.92rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  color: var(--ink);
+  background: var(--mint);
+  transition: opacity 160ms ease, transform 160ms ease;
+}
+
+.lane-continue-refresh:active:not(:disabled) {
+  transform: scale(0.98);
+}
+
+.lane-continue-refresh:disabled,
+.lane-continue-refresh.is-busy {
+  opacity: 0.7;
 }
 
 .swipe-hint {

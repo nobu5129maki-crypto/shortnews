@@ -54,10 +54,10 @@ export default defineConfig({
         ],
         shortcuts: [
           {
-            name: 'マイフィード',
-            short_name: 'マイ',
+            name: '最新フィード',
+            short_name: 'フィード',
             description: '選んだジャンルの最新ニュースを開く',
-            url: '/?tab=mine',
+            url: '/',
             icons: [{ src: '/icons/icon-192.png', sizes: '192x192' }],
           },
         ],
