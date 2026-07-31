@@ -32,7 +32,7 @@ const videos = [
   'https://cdn.coverr.co/videos/coverr-aerial-view-of-a-city-at-night-5722/720p.mp4',
 ]
 
-export const newsItems: NewsItem[] = [
+const baseNewsItems: NewsItem[] = [
   {
     id: 'n1',
     genre: 'politics',
@@ -839,3 +839,125 @@ export const newsItems: NewsItem[] = [
     comments: 81,
   },
 ]
+
+const EXTRA_HEADLINES: Record<BuiltinGenreId, string[]> = {
+  politics: [
+    '与野党、補正予算の修正協議が大詰め',
+    'デジタル庁、自治体向け共通基盤の導入を加速',
+    '防衛装備の共同開発、関連法案の審議が始まる',
+    '地方議会、若者議会枠の試行を拡大',
+    '選挙制度改革、有識者会議が中間整理を公表',
+    '公務員の副業解禁、実証自治体が追加',
+  ],
+  business: [
+    '円相場、輸出企業の想定レートを下回る水準に',
+    '国内小売、キャッシュレス比率が過去最高を更新',
+    '半導体装置メーカー、受注残が過去最大に',
+    '地方銀行、事業承継ファンドの組成が相次ぐ',
+    '物流各社、共同配送の実証を広域に拡大',
+    '賃金改定、中堅企業でもベースアップが広がる',
+  ],
+  tech: [
+    '次世代通信、屋内向け小型基地局の導入が進む',
+    'クラウド大手、国内データセンター増強を発表',
+    'オープンソース、企業向けセキュリティ監査が標準化へ',
+    'ウェアラブル端末、健康データの連携規格が統一',
+    '開発ツール、AI支援のコードレビューが一般化',
+    'サイバー防御、中小向け監視サービスが拡充',
+  ],
+  ai: [
+    '生成AI、社内文書検索の導入企業が急増',
+    '音声AI、コールセンターの一次対応を代替',
+    '画像生成、商用素材の権利表示ルールが明確化',
+    '自動運転、市街地での実証エリアが拡大',
+    '教育現場、個別最適ドリルにAIを本格導入',
+    'AIチップ、省電力設計の新製品が相次ぎ発表',
+  ],
+  sports: [
+    '高校サッカー、地区予選で番狂わせが続出',
+    'プロ野球、投手分業の最適化が進む',
+    '陸上短距離、合宿でコンディション調整が佳境',
+    'バスケBリーグ、観客動員が過去最多ペース',
+    'テニス、若手選手の海外挑戦が増加',
+    'ラグビー、国内リーグの配信視聴が伸長',
+  ],
+  entertainment: [
+    '配信ドラマ、短尺縦型シリーズの制作が拡大',
+    '音楽チャート、インディーズ勢の浮上が目立つ',
+    '舞台公演、地方巡回ツアーの需要が回復',
+    'アニメ映画、海外興行収入が過去最高に',
+    'バラエティー、生成クリップの二次配信が活発',
+    'ゲーム、クラウドプレイの同時接続が更新',
+  ],
+  world: [
+    '国際エネルギー機関、供給安定策を改定',
+    'アジア外相会合、海洋安全保障を議題に',
+    '途上国支援、デジタル教育枠が拡充される',
+    '為替協調、主要国当局が声明を発表',
+    '難民支援、冬季物資の緊急輸送が始まる',
+    '宇宙協力、探査データの国際共有が進む',
+  ],
+  science: [
+    '新型望遠鏡、初期観測で遠方銀河を多数検出',
+    '再生医療、軟骨修復の臨床試験が次段階へ',
+    '気象モデル、局地豪雨の予測精度が向上',
+    '材料科学、軽量合金の量産プロセスを確立',
+    '生態調査、都市部の生物多様性マップを公開',
+    '脳科学、睡眠の質と学習効率の関係を確認',
+  ],
+  life: [
+    '通勤改革、週数回出社のハイブリッドが定着',
+    '子育て支援、病児保育の予約アプリが普及',
+    '住まい、断熱改修の補助申請が急増',
+    '食の安全、産地 Trace 表示の義務化が議論に',
+    '地域交通、デマンドバスの運行エリアが拡大',
+    '健康管理、自治体の検診リマインドが強化',
+  ],
+}
+
+function buildExtraDemo(): NewsItem[] {
+  const extras: NewsItem[] = []
+  let index = 0
+  for (const genre of genres) {
+    const id = genre.id as BuiltinGenreId
+    const headlines = EXTRA_HEADLINES[id] ?? []
+    for (const title of headlines) {
+      const seed = index
+      index += 1
+      extras.push({
+        id: `demo-extra-${id}-${seed}`,
+        genre: id,
+        title,
+        summary: `${genre.label}の最新動向。要点を短く把握できる。`,
+        detail: `${title}。関係者への取材では、今後数週間の動きが焦点になるとみられる。利用者は背景と影響を押さえたうえで、続報を追うのがよさそうだ。`,
+        keyPoints: [
+          `${genre.label}分野の注目トピック`,
+          '今後のスケジュールが焦点',
+          '影響範囲の確認が必要',
+        ],
+        related: [
+          {
+            id: `demo-extra-${id}-${seed}-a`,
+            label: '背景',
+            detail: '関連する制度・市場・技術の変化が重なり、関心が動いている。',
+          },
+          {
+            id: `demo-extra-${id}-${seed}-b`,
+            label: '注目点',
+            detail: '次の発表や指標で方向性がはっきりする可能性が高い。',
+          },
+        ],
+        source: `MYLINE${genre.label}`,
+        publishedAt: `${(seed % 8) + 1}時間前`,
+        videoUrl: videos[seed % videos.length],
+        posterUrl:
+          'https://images.unsplash.com/photo-1504711434719-95008e799332?w=800&q=80',
+        likes: 400 + seed * 17,
+        comments: 30 + (seed % 40),
+      })
+    }
+  }
+  return extras
+}
+
+export const newsItems: NewsItem[] = [...baseNewsItems, ...buildExtraDemo()]

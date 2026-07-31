@@ -14,30 +14,22 @@ import { SwipeHint } from './SwipeHint'
 import { TextScaleControl } from './TextScaleControl'
 import { useTextScale } from '../hooks/useTextScale'
 
-const MIN_SWIPE_ITEMS = 6
-
 type Props = {
   myGenres: GenreId[]
   onAddGenre: (id: GenreId) => void
   onRemoveGenre: (id: GenreId) => void
 }
 
+/** 選択中ジャンルを先頭に、他ジャンルも続けてスワイプできる一本のレーンにする */
 function buildFeedItems(
   tab: GenreId,
   liveItems: NewsItem[],
   myGenreSet: Set<GenreId>,
 ): NewsItem[] {
-  const primary = liveItems.filter((item) => item.genre === tab)
-  if (primary.length >= MIN_SWIPE_ITEMS) return primary
-
-  const extras = liveItems.filter(
-    (item) => item.genre !== tab && myGenreSet.has(item.genre),
-  )
-  if (extras.length === 0) return primary
-
-  const needed = Math.max(MIN_SWIPE_ITEMS - primary.length, 0)
-  const topped = needed > 0 ? extras.slice(0, Math.max(needed, 3)) : []
-  return [...primary, ...topped]
+  const pool = liveItems.filter((item) => myGenreSet.has(item.genre))
+  const primary = pool.filter((item) => item.genre === tab)
+  const rest = pool.filter((item) => item.genre !== tab)
+  return [...primary, ...rest]
 }
 
 export function Feed({ myGenres, onAddGenre, onRemoveGenre }: Props) {
@@ -235,7 +227,7 @@ export function Feed({ myGenres, onAddGenre, onRemoveGenre }: Props) {
         <div className="chrome-meta">
           <span className="live-pill" aria-label="最新">
             <span className="live-dot" />
-            {myGenres.length === 0 ? 'READY' : source === 'live' ? 'LIVE' : 'DEMO'}
+            {myGenres.length === 0 ? 'READY' : source === 'fallback' ? 'DEMO' : 'LIVE'}
           </span>
         </div>
 
@@ -306,7 +298,7 @@ export function Feed({ myGenres, onAddGenre, onRemoveGenre }: Props) {
         )}
       </div>
 
-      <SwipeHint visible={showHint && slideCount > 1 && !editorOpen} />
+      <SwipeHint visible={showHint && items.length > 1 && !editorOpen} />
 
       <GenreEditor
         open={editorOpen}

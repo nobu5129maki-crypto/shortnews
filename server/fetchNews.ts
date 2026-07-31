@@ -1265,8 +1265,8 @@ function dedupe(items: NewsItem[]): NewsItem[] {
 
 function balanceCandidates(
   items: FeedCandidate[],
-  perGenre = 36,
-  total = 240,
+  perGenre = 48,
+  total = 280,
 ): FeedCandidate[] {
   const groups = new Map<GenreId, FeedCandidate[]>()
   for (const item of items) {
@@ -1277,9 +1277,9 @@ function balanceCandidates(
 
   const genreCount = Math.max(groups.size, 1)
   const dynamicPerGenre =
-    genreCount <= 2 ? Math.max(perGenre, 90) : perGenre
+    genreCount <= 2 ? Math.max(perGenre, 100) : perGenre
   const dynamicTotal =
-    genreCount <= 2 ? Math.max(total, 140) : total
+    genreCount <= 2 ? Math.max(total, 160) : total
 
   const picked: FeedCandidate[] = []
   for (const list of groups.values()) {
@@ -1302,8 +1302,8 @@ function balanceCandidates(
 
 function balanceByGenre(
   items: NewsItem[],
-  perGenre = 28,
-  total = 200,
+  perGenre = 40,
+  total = 240,
 ): NewsItem[] {
   const groups = new Map<GenreId, NewsItem[]>()
   for (const item of items) {
@@ -1314,9 +1314,9 @@ function balanceByGenre(
 
   const genreCount = Math.max(groups.size, 1)
   const dynamicPerGenre =
-    genreCount <= 2 ? Math.max(perGenre, 72) : perGenre
+    genreCount <= 2 ? Math.max(perGenre, 80) : perGenre
   const dynamicTotal =
-    genreCount <= 2 ? Math.max(total, 120) : total
+    genreCount <= 2 ? Math.max(total, 140) : total
 
   const picked: NewsItem[] = []
   for (const list of groups.values()) {
@@ -1557,13 +1557,11 @@ export async function fetchLatestNews(
     result.status === 'fulfilled' ? result.value : balanced[index],
   )
 
-  // 翻訳後もキーワード適合を再確認（英語タイトル経由の誤通過を防ぐ）
+  // 翻訳後は検索ジャンルだけ再確認（組み込みは収集時に適合済み。翻訳ゆれで本数を落とさない）
   if (genreIds && genreIds.length > 0) {
     return results.filter((item) => {
       if (!genreIds.includes(item.genre)) return false
-      if (!isSearchGenre(item.genre)) {
-        return isRelevantToGenre(item.genre, item.title, item.detail)
-      }
+      if (!isSearchGenre(item.genre)) return true
       return titleMatchesSearchQuery(item.title, labelFromGenreId(item.genre))
     })
   }
