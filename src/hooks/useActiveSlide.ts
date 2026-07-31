@@ -1,4 +1,4 @@
-import { useEffect, useState, type RefObject } from 'react'
+import { useEffect, useRef, useState, type RefObject } from 'react'
 
 export function useActiveSlide(
   containerRef: RefObject<HTMLElement | null>,
@@ -9,11 +9,28 @@ export function useActiveSlide(
   const [activeIndex, setActiveIndex] = useState(() =>
     Math.max(0, Math.min(initialIndex, Math.max(itemCount - 1, 0))),
   )
+  const initialIndexRef = useRef(initialIndex)
+  const itemCountRef = useRef(itemCount)
+  initialIndexRef.current = initialIndex
+  itemCountRef.current = itemCount
 
+  // タブ切替など resetKey 変化時だけ着地。既読更新や記事追加では飛ばさない
   useEffect(() => {
-    const clamped = Math.max(0, Math.min(initialIndex, Math.max(itemCount - 1, 0)))
+    const count = itemCountRef.current
+    const clamped = Math.max(
+      0,
+      Math.min(initialIndexRef.current, Math.max(count - 1, 0)),
+    )
     setActiveIndex(clamped)
-  }, [resetKey, initialIndex, itemCount])
+  }, [resetKey])
+
+  // 記事数が減ったときだけ現在位置をクランプ（増えたときは読書位置を維持）
+  useEffect(() => {
+    setActiveIndex((prev) => {
+      if (itemCount <= 0) return 0
+      return Math.min(prev, itemCount - 1)
+    })
+  }, [itemCount])
 
   useEffect(() => {
     const root = containerRef.current

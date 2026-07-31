@@ -162,18 +162,15 @@ export function Feed({ myGenres, onAddGenre, onRemoveGenre }: Props) {
   }, [activeTab, activeIndex, items, markItemSeen])
 
   const landedTabRef = useRef<GenreId | null>(null)
-  const wasRefreshingRef = useRef(false)
 
-  // タブ切替時、または更新完了時に最新側へ着地（読書中の自動更新では飛ばない）
+  // タブ切替（または初回の記事到着）時だけ最新側へ着地。
+  // 自動更新・手動更新では読書中の過去記事から飛ばさない。
   useEffect(() => {
-    const finishedRefresh = wasRefreshingRef.current && !refreshing
-    wasRefreshingRef.current = refreshing
-
     const node = feedRef.current
     if (!node || !activeTab || items.length === 0) return
 
     const tabChanged = landedTabRef.current !== activeTab
-    if (!tabChanged && !finishedRefresh) return
+    if (!tabChanged) return
     landedTabRef.current = activeTab
 
     const index = Math.max(0, Math.min(landingIndex, items.length - 1))
@@ -184,7 +181,7 @@ export function Feed({ myGenres, onAddGenre, onRemoveGenre }: Props) {
     node
       .querySelector<HTMLElement>(`[data-index="${index}"]`)
       ?.scrollIntoView({ behavior: 'auto', block: 'start' })
-  }, [activeTab, items, landingIndex, refreshing])
+  }, [activeTab, items, landingIndex])
 
   useEffect(() => {
     if (!showHint) return
@@ -244,39 +241,103 @@ export function Feed({ myGenres, onAddGenre, onRemoveGenre }: Props) {
     return () => window.removeEventListener('keydown', onKey)
   }, [activeIndex, slideCount, feedLocked])
 
-  // 詳細パネル端までスクロールしたら、フィードの次／前へ受け渡す
+  // 詳細パネル上でも、端／速いスワイプならスライド単位で新旧へ移動する
   useEffect(() => {
     const feed = feedRef.current
     if (!feed || feedLocked) return
 
+    const SWIPE_DISTANCE = 56
+    const SWIPE_VELOCITY = 0.45
+    const EDGE_PX = 2
+
+    const isScrollableMeta = (meta: HTMLElement) =>
+      meta.classList.contains('is-scrollable') &&
+      meta.scrollHeight > meta.clientHeight + 8
+
+    const atMetaTop = (meta: HTMLElement) => meta.scrollTop <= EDGE_PX
+    const atMetaBottom = (meta: HTMLElement) =>
+      meta.scrollTop + meta.clientHeight >= meta.scrollHeight - EDGE_PX
+
+    const currentSlideIndex = () => {
+      const slides = Array.from(
+        feed.querySelectorAll<HTMLElement>('[data-slide]'),
+      )
+      if (slides.length === 0) return 0
+      const mid = feed.scrollTop + feed.clientHeight / 2
+      let best = 0
+      let bestDist = Number.POSITIVE_INFINITY
+      for (const slide of slides) {
+        const center = slide.offsetTop + slide.offsetHeight / 2
+        const dist = Math.abs(center - mid)
+        if (dist < bestDist) {
+          bestDist = dist
+          best = Number(slide.dataset.index) || 0
+        }
+      }
+      return best
+    }
+
+    const goTo = (next: number) => {
+      const clamped = Math.max(0, Math.min(slideCount - 1, next))
+      const slide = feed.querySelector<HTMLElement>(`[data-index="${clamped}"]`)
+      if (!slide) return
+      const prevBehavior = feed.style.scrollBehavior
+      feed.style.scrollBehavior = 'auto'
+      slide.scrollIntoView({ behavior: 'smooth', block: 'start' })
+      window.setTimeout(() => {
+        feed.style.scrollBehavior = prevBehavior
+      }, 420)
+    }
+
+    let wheelLockUntil = 0
     const onWheel = (event: WheelEvent) => {
       const target = event.target
       if (!(target instanceof Element)) return
       const meta = target.closest('[data-slide-meta]')
       if (!(meta instanceof HTMLElement)) return
+      if (!isScrollableMeta(meta)) return
 
-      const atTop = meta.scrollTop <= 0
-      const atBottom =
-        meta.scrollTop + meta.clientHeight >= meta.scrollHeight - 2
-      if ((event.deltaY < 0 && atTop) || (event.deltaY > 0 && atBottom)) {
-        event.preventDefault()
-        feed.scrollTop += event.deltaY
-      }
+      const towardNewer = event.deltaY > 0
+      const towardOlder = event.deltaY < 0
+      const atEdge =
+        (towardOlder && atMetaTop(meta)) || (towardNewer && atMetaBottom(meta))
+      if (!atEdge) return
+
+      event.preventDefault()
+      const now = performance.now()
+      if (now < wheelLockUntil) return
+      if (Math.abs(event.deltaY) < 8) return
+      wheelLockUntil = now + 480
+      goTo(currentSlideIndex() + (towardNewer ? 1 : -1))
     }
 
-    let lastY = 0
     let tracking: HTMLElement | null = null
+    let startY = 0
+    let lastY = 0
+    let startTime = 0
+    let feeding = false
+    let accumulated = 0
 
     const onTouchStart = (event: TouchEvent) => {
       const target = event.target
       if (!(target instanceof Element)) return
-      const meta = target.closest('[data-slide-meta]')
-      if (!(meta instanceof HTMLElement)) {
+      if (target.closest('a, button, [role="button"]')) {
         tracking = null
+        feeding = false
+        return
+      }
+      const meta = target.closest('[data-slide-meta]')
+      if (!(meta instanceof HTMLElement) || !isScrollableMeta(meta)) {
+        tracking = null
+        feeding = false
         return
       }
       tracking = meta
-      lastY = event.touches[0]?.clientY ?? 0
+      startY = event.touches[0]?.clientY ?? 0
+      lastY = startY
+      startTime = performance.now()
+      feeding = false
+      accumulated = 0
     }
 
     const onTouchMove = (event: TouchEvent) => {
@@ -284,33 +345,78 @@ export function Feed({ myGenres, onAddGenre, onRemoveGenre }: Props) {
       const y = event.touches[0]?.clientY ?? lastY
       const dy = lastY - y
       lastY = y
-      const atTop = tracking.scrollTop <= 0
-      const atBottom =
-        tracking.scrollTop + tracking.clientHeight >= tracking.scrollHeight - 2
-      if ((dy < 0 && atTop) || (dy > 0 && atBottom)) {
-        event.preventDefault()
-        feed.scrollTop += dy
+      const totalDy = startY - y
+      const elapsed = Math.max(performance.now() - startTime, 1)
+      const velocity = totalDy / elapsed
+
+      // 速い／長いスワイプは本文の途中からでもフィード遷移を優先
+      const flickToFeed =
+        Math.abs(velocity) >= SWIPE_VELOCITY ||
+        Math.abs(totalDy) >= SWIPE_DISTANCE * 1.75
+
+      const towardNewer = dy > 0
+      const towardOlder = dy < 0
+      const atEdge =
+        feeding ||
+        flickToFeed ||
+        (towardOlder && atMetaTop(tracking)) ||
+        (towardNewer && atMetaBottom(tracking))
+
+      if (!atEdge) {
+        accumulated = 0
+        return
       }
+
+      // 端・フリックは詳細内スクロールを止め、フィード遷移の意図として積む
+      event.preventDefault()
+      feeding = true
+      accumulated += dy
+      const prevBehavior = feed.style.scrollBehavior
+      feed.style.scrollBehavior = 'auto'
+      feed.scrollTop += dy
+      feed.style.scrollBehavior = prevBehavior
     }
 
-    const onTouchEnd = () => {
+    const finishTouch = () => {
+      if (!tracking) return
+      const elapsed = Math.max(performance.now() - startTime, 1)
+      const totalDy = startY - lastY
+      const velocity = totalDy / elapsed
+      const shouldFlip =
+        feeding &&
+        (Math.abs(totalDy) >= SWIPE_DISTANCE ||
+          Math.abs(velocity) >= SWIPE_VELOCITY ||
+          Math.abs(accumulated) >= SWIPE_DISTANCE)
+
+      if (shouldFlip) {
+        const direction = totalDy > 0 || accumulated > 0 ? 1 : -1
+        goTo(currentSlideIndex() + direction)
+      } else if (feeding) {
+        // 閾値未満は現在スライドへスナップバック
+        goTo(currentSlideIndex())
+      }
+
       tracking = null
+      feeding = false
+      accumulated = 0
+      startY = 0
       lastY = 0
+      startTime = 0
     }
 
     feed.addEventListener('wheel', onWheel, { passive: false })
     feed.addEventListener('touchstart', onTouchStart, { passive: true })
     feed.addEventListener('touchmove', onTouchMove, { passive: false })
-    feed.addEventListener('touchend', onTouchEnd)
-    feed.addEventListener('touchcancel', onTouchEnd)
+    feed.addEventListener('touchend', finishTouch)
+    feed.addEventListener('touchcancel', finishTouch)
     return () => {
       feed.removeEventListener('wheel', onWheel)
       feed.removeEventListener('touchstart', onTouchStart)
       feed.removeEventListener('touchmove', onTouchMove)
-      feed.removeEventListener('touchend', onTouchEnd)
-      feed.removeEventListener('touchcancel', onTouchEnd)
+      feed.removeEventListener('touchend', finishTouch)
+      feed.removeEventListener('touchcancel', finishTouch)
     }
-  }, [feedLocked, items.length, activeTab])
+  }, [feedLocked, items.length, activeTab, slideCount])
 
   const onTabChange = (id: GenreId) => {
     setTab(id)

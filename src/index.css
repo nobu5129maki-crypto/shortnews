@@ -584,8 +584,16 @@ button {
   animation: rise-in 420ms ease both;
 }
 
+/* 本文が収まるときはタッチをフィードへ通し、新旧スワイプを妨げない */
 .slide-meta:not(.is-scrollable) {
-  touch-action: none;
+  overflow-y: hidden;
+  overscroll-behavior-y: auto;
+  pointer-events: none;
+  touch-action: pan-y;
+}
+
+.slide-meta:not(.is-scrollable) .slide-link {
+  pointer-events: auto;
 }
 
 .slide-meta-panel {
