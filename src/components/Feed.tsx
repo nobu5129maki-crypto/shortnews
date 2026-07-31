@@ -76,7 +76,7 @@ export function Feed({ myGenres, onAddGenre, onRemoveGenre }: Props) {
 
   const primaryCount = items.length
 
-  /** タブを開いたときの着地位置：未読の最古 → そこから上スワイプで最新へ。無ければ最新末尾 */
+  /** タブを開いたときの着地位置：最新（未読があればその最新）。古い記事から始まらない */
   const landingIndex = useMemo(() => {
     if (items.length === 0) return 0
     if (activeTab) {
@@ -85,7 +85,7 @@ export function Feed({ myGenres, onAddGenre, onRemoveGenre }: Props) {
         const indices = unseen
           .map((id) => items.findIndex((item) => item.id === id))
           .filter((index) => index >= 0)
-        if (indices.length > 0) return Math.min(...indices)
+        if (indices.length > 0) return Math.max(...indices)
       }
     }
     return items.length - 1
@@ -116,7 +116,8 @@ export function Feed({ myGenres, onAddGenre, onRemoveGenre }: Props) {
   const activeIndex = useActiveSlide(
     feedRef,
     slideCount,
-    `${activeTab ?? 'none'}:${items.map((item) => item.id).join(',')}`,
+    // 記事IDの差し替えごとにはリセットしない（自動更新で読書位置が飛ばない）
+    `${activeTab ?? 'none'}:${items.length === 0 ? 'empty' : 'ready'}`,
     landingIndex,
   )
   const canGoNewer =
@@ -160,18 +161,20 @@ export function Feed({ myGenres, onAddGenre, onRemoveGenre }: Props) {
     markItemSeen(activeTab, current.id)
   }, [activeTab, activeIndex, items, markItemSeen])
 
-  const jumpedTabRef = useRef<GenreId | null>(null)
+  const landedTabRef = useRef<GenreId | null>(null)
+  const wasRefreshingRef = useRef(false)
 
+  // タブ切替時、または更新完了時に最新側へ着地（読書中の自動更新では飛ばない）
   useEffect(() => {
-    jumpedTabRef.current = null
-  }, [activeTab])
+    const finishedRefresh = wasRefreshingRef.current && !refreshing
+    wasRefreshingRef.current = refreshing
 
-  // タブを開いた直後だけ着地位置へジャンプ（最新末尾 or 未読の開始）
-  useEffect(() => {
     const node = feedRef.current
     if (!node || !activeTab || items.length === 0) return
-    if (jumpedTabRef.current === activeTab) return
-    jumpedTabRef.current = activeTab
+
+    const tabChanged = landedTabRef.current !== activeTab
+    if (!tabChanged && !finishedRefresh) return
+    landedTabRef.current = activeTab
 
     const index = Math.max(0, Math.min(landingIndex, items.length - 1))
     if (index <= 0) {
@@ -181,7 +184,7 @@ export function Feed({ myGenres, onAddGenre, onRemoveGenre }: Props) {
     node
       .querySelector<HTMLElement>(`[data-index="${index}"]`)
       ?.scrollIntoView({ behavior: 'auto', block: 'start' })
-  }, [activeTab, items, landingIndex])
+  }, [activeTab, items, landingIndex, refreshing])
 
   useEffect(() => {
     if (!showHint) return

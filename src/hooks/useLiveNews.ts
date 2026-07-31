@@ -5,8 +5,10 @@ import type { GenreId, NewsApiResponse, NewsItem } from '../types'
 const REFRESH_MS = 3 * 60 * 1000
 const FETCH_TIMEOUT_MS = 28_000
 const MIN_SWIPE_ITEMS = 12
-const HISTORY_KEY = 'brief.newsHistory.v1'
+const HISTORY_KEY = 'brief.newsHistory.v2'
 const MAX_HISTORY_PER_GENRE = 60
+/** 履歴・表示に残す最大経過時間（古い記事でフィードが埋まるのを防ぐ） */
+const MAX_ARTICLE_AGE_MS = 7 * 24 * 60 * 60 * 1000
 
 type LiveNewsState = {
   items: NewsItem[]
@@ -27,6 +29,12 @@ function titleKey(title: string): string {
 function timeValue(value: string): number {
   const parsed = Date.parse(value)
   return Number.isNaN(parsed) ? 0 : parsed
+}
+
+function isFreshEnough(item: NewsItem, now = Date.now()): boolean {
+  const published = timeValue(item.publishedAt)
+  if (published <= 0) return true
+  return now - published <= MAX_ARTICLE_AGE_MS
 }
 
 function sortByNewest(items: NewsItem[]): NewsItem[] {
@@ -64,12 +72,20 @@ function mergeUnique(parts: NewsItem[][]): NewsItem[] {
   return sortByOldest(merged)
 }
 
+/** 重複排除したうえで新しい順に上限まで残す（履歴が古い記事で埋まらないようにする） */
+function keepNewestUnique(parts: NewsItem[][], limit: number): NewsItem[] {
+  return sortByNewest(mergeUnique(parts)).slice(0, limit)
+}
+
 function readHistory(): HistoryMap {
   try {
-    const raw = localStorage.getItem(HISTORY_KEY)
+    const raw =
+      localStorage.getItem(HISTORY_KEY) ??
+      localStorage.getItem('brief.newsHistory.v1')
     if (!raw) return {}
     const parsed = JSON.parse(raw) as unknown
     if (!parsed || typeof parsed !== 'object') return {}
+    const now = Date.now()
     const next: HistoryMap = {}
     for (const [genre, value] of Object.entries(parsed as Record<string, unknown>)) {
       if (!Array.isArray(value)) continue
@@ -80,10 +96,15 @@ function readHistory(): HistoryMap {
           typeof row.id === 'string' &&
           typeof row.genre === 'string' &&
           typeof row.title === 'string' &&
-          typeof row.detail === 'string'
+          typeof row.detail === 'string' &&
+          typeof row.publishedAt === 'string'
         )
       })
-      if (items.length > 0) next[genre] = sortByNewest(items).slice(0, MAX_HISTORY_PER_GENRE)
+      const fresh = keepNewestUnique(
+        [items.filter((item) => isFreshEnough(item, now))],
+        MAX_HISTORY_PER_GENRE,
+      )
+      if (fresh.length > 0) next[genre] = fresh
     }
     return next
   } catch {
@@ -100,26 +121,33 @@ function persistHistory(map: HistoryMap) {
 }
 
 function historyFor(selected: GenreId[], map: HistoryMap): NewsItem[] {
+  const now = Date.now()
   const parts: NewsItem[][] = []
   for (const genre of selected) {
     const list = map[genre]
-    if (list && list.length > 0) parts.push(list)
+    if (list && list.length > 0) {
+      parts.push(list.filter((item) => isFreshEnough(item, now)))
+    }
   }
   return mergeUnique(parts)
 }
 
 function rememberLiveArticles(selected: GenreId[], live: NewsItem[], prev: HistoryMap): HistoryMap {
   const next: HistoryMap = { ...prev }
+  const now = Date.now()
   for (const genre of selected) {
     const incoming = live.filter(
-      (item) => item.genre === genre && item.id.startsWith('live-'),
+      (item) =>
+        item.genre === genre &&
+        item.id.startsWith('live-') &&
+        isFreshEnough(item, now),
     )
     if (incoming.length === 0) continue
-    const merged = mergeUnique([incoming, next[genre] ?? []]).slice(
-      0,
+    // 必ず新しい順で切り詰める（古い順 slice だと最新が落ちて古い記事だけ残る）
+    next[genre] = keepNewestUnique(
+      [incoming, (next[genre] ?? []).filter((item) => isFreshEnough(item, now))],
       MAX_HISTORY_PER_GENRE,
     )
-    next[genre] = merged
   }
   persistHistory(next)
   return next
@@ -143,8 +171,13 @@ function ensureVolume(
   items: NewsItem[]
   source: 'live' | 'fallback' | 'mixed'
 } {
-  const scopedLive = scopeToGenres(live, selected)
-  const scopedHistory = scopeToGenres(history, selected)
+  const now = Date.now()
+  const scopedLive = scopeToGenres(live, selected).filter((item) =>
+    isFreshEnough(item, now),
+  )
+  const scopedHistory = scopeToGenres(history, selected).filter((item) =>
+    isFreshEnough(item, now),
+  )
   const demo = fallbackFor(selected)
 
   // 本番 → 履歴 → デモを統合し、古い→新しい順にする

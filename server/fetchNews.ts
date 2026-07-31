@@ -306,7 +306,7 @@ const FEEDS: FeedSource[] = [
   },
   {
     genre: 'business',
-    url: 'https://news.google.com/rss/search?q=site:reuters.com+business&hl=en&gl=US&ceid=US:en',
+    url: 'https://news.google.com/rss/search?q=site:reuters.com+business+when:7d&hl=en&gl=US&ceid=US:en',
     label: 'Reuters Business',
     limit: 8,
   },
@@ -628,13 +628,13 @@ const FEEDS: FeedSource[] = [
   },
   {
     genre: 'world',
-    url: 'https://news.google.com/rss/search?q=site:reuters.com+world&hl=en&gl=US&ceid=US:en',
+    url: 'https://news.google.com/rss/search?q=site:reuters.com+world+when:7d&hl=en&gl=US&ceid=US:en',
     label: 'Reuters World',
     limit: 10,
   },
   {
     genre: 'world',
-    url: 'https://news.google.com/rss/search?q=site:cnn.com+world&hl=en&gl=US&ceid=US:en',
+    url: 'https://news.google.com/rss/search?q=site:cnn.com+world+when:7d&hl=en&gl=US&ceid=US:en',
     label: 'CNN World',
     limit: 8,
   },
@@ -1042,10 +1042,39 @@ function pick<T>(list: T[], seed: number): T {
   return list[seed % list.length]
 }
 
-function toIso(value: string): string {
+/** 記事の最大許容経過日数（これを超える候補は原則除外） */
+const MAX_ARTICLE_AGE_MS = 7 * 24 * 60 * 60 * 1000
+const SOFT_ARTICLE_AGE_MS = 14 * 24 * 60 * 60 * 1000
+
+function pubTime(value: string): number {
   const time = Date.parse(value)
-  if (Number.isNaN(time)) return new Date().toISOString()
+  return Number.isNaN(time) ? 0 : time
+}
+
+function toIso(value: string): string {
+  const time = pubTime(value)
+  // 表示用。候補の並び替えは pubTime（不明=0）で行い、日付不明を最新扱いしない
+  if (time <= 0) return new Date().toISOString()
   return new Date(time).toISOString()
+}
+
+function isWithinAge(pubDate: string, maxAgeMs: number, now = Date.now()): boolean {
+  const time = pubTime(pubDate)
+  if (time <= 0) return true
+  return now - time <= maxAgeMs
+}
+
+function preferFresh<T>(
+  items: T[],
+  getDate: (item: T) => string,
+  minKeep: number,
+  now = Date.now(),
+): T[] {
+  const hard = items.filter((item) => isWithinAge(getDate(item), MAX_ARTICLE_AGE_MS, now))
+  if (hard.length >= minKeep) return hard
+  const soft = items.filter((item) => isWithinAge(getDate(item), SOFT_ARTICLE_AGE_MS, now))
+  if (soft.length >= Math.min(minKeep, 4)) return soft
+  return items
 }
 
 function splitSentences(text: string): string[] {
@@ -1212,15 +1241,20 @@ async function fetchFeedCandidates(source: FeedSource): Promise<FeedCandidate[]>
     )
   }
 
-  // 検索ジャンルはタイトル一致を優先して並べ替え
-  if (isSearchGenre(source.genre)) {
-    const q = labelFromGenreId(source.genre)
-    filtered = filtered.slice().sort((a, b) => {
+  // 古い記事を落としてから新しい順へ（検索エンジンの関連度順で古いものが上位に来るのを防ぐ）
+  filtered = preferFresh(filtered, (item) => item.pubDate, Math.min(limit, 4))
+  filtered = filtered.slice().sort((a, b) => {
+    const byDate = pubTime(b.pubDate) - pubTime(a.pubDate)
+    if (byDate !== 0) return byDate
+    // 同着・日付不明時は検索ジャンルだけタイトル一致を優先
+    if (isSearchGenre(source.genre)) {
+      const q = labelFromGenreId(source.genre)
       const aTitle = a.title.includes(q) ? 1 : 0
       const bTitle = b.title.includes(q) ? 1 : 0
       return bTitle - aTitle
-    })
-  }
+    }
+    return 0
+  })
 
   return filtered.slice(0, limit).map((item) => ({
     item,
@@ -1283,20 +1317,15 @@ function balanceCandidates(
 
   const picked: FeedCandidate[] = []
   for (const list of groups.values()) {
-    list.sort(
-      (a, b) =>
-        Date.parse(b.item.pubDate || '') - Date.parse(a.item.pubDate || '') ||
-        0,
+    const fresh = preferFresh(list, (candidate) => candidate.item.pubDate, 8)
+    fresh.sort(
+      (a, b) => pubTime(b.item.pubDate) - pubTime(a.item.pubDate),
     )
-    picked.push(...list.slice(0, dynamicPerGenre))
+    picked.push(...fresh.slice(0, dynamicPerGenre))
   }
 
-  return picked
-    .sort(
-      (a, b) =>
-        Date.parse(b.item.pubDate || '') - Date.parse(a.item.pubDate || '') ||
-        0,
-    )
+  return preferFresh(picked, (candidate) => candidate.item.pubDate, 12)
+    .sort((a, b) => pubTime(b.item.pubDate) - pubTime(a.item.pubDate))
     .slice(0, dynamicTotal)
 }
 
@@ -1320,18 +1349,15 @@ function balanceByGenre(
 
   const picked: NewsItem[] = []
   for (const list of groups.values()) {
-    list.sort(
-      (a, b) =>
-        new Date(b.publishedAt).getTime() - new Date(a.publishedAt).getTime(),
+    const fresh = preferFresh(list, (item) => item.publishedAt, 8)
+    fresh.sort(
+      (a, b) => pubTime(b.publishedAt) - pubTime(a.publishedAt),
     )
-    picked.push(...list.slice(0, dynamicPerGenre))
+    picked.push(...fresh.slice(0, dynamicPerGenre))
   }
 
-  return picked
-    .sort(
-      (a, b) =>
-        new Date(b.publishedAt).getTime() - new Date(a.publishedAt).getTime(),
-    )
+  return preferFresh(picked, (item) => item.publishedAt, 12)
+    .sort((a, b) => pubTime(b.publishedAt) - pubTime(a.publishedAt))
     .slice(0, dynamicTotal)
 }
 
@@ -1339,6 +1365,25 @@ function isDomesticHost(host: string): boolean {
   return /\.jp$|yahoo\.co\.jp|nhk\.or\.jp|nikkei\.com|asahi\.com|mainichi\.jp|oricon\.co\.jp|itmedia\.co\.jp|toyokeizai\.net|fnn\.jp|jiji\.com|sponichi\.co\.jp|nikkansports\.com/.test(
     host,
   )
+}
+
+/** Google/Bing 向けに直近記事へ寄せるクエリ（when:7d） */
+function withRecency(query: string): string {
+  if (/\bwhen:\d+[dwmy]\b/i.test(query)) return query
+  return `${query} when:7d`
+}
+
+function googleNewsSearchUrl(
+  query: string,
+  opts: { hl: string; gl: string; ceid: string },
+): string {
+  const q = encodeURIComponent(withRecency(query))
+  return `https://news.google.com/rss/search?q=${q}&hl=${opts.hl}&gl=${opts.gl}&ceid=${opts.ceid}`
+}
+
+function bingNewsSearchUrl(query: string, market: string): string {
+  const q = encodeURIComponent(withRecency(query))
+  return `https://www.bing.com/news/search?q=${q}&format=RSS&mkt=${market}`
 }
 
 /** 組み込みジャンル向け: Google/Bing 横断で国内外を追加収集 */
@@ -1349,18 +1394,16 @@ function genreSupplementFeeds(
   const queries = GENRE_SEARCH_QUERIES[id]
   if (!queries) return []
 
-  const ja = encodeURIComponent(queries.ja)
-  const en = encodeURIComponent(queries.en)
   const primary: FeedSource[] = [
     {
       genre: id,
-      url: `https://news.google.com/rss/search?q=${ja}&hl=ja&gl=JP&ceid=JP:ja`,
+      url: googleNewsSearchUrl(queries.ja, { hl: 'ja', gl: 'JP', ceid: 'JP:ja' }),
       label: `Google ニュース · ${queries.ja}`,
       limit: compact ? 6 : 10,
     },
     {
       genre: id,
-      url: `https://www.bing.com/news/search?q=${ja}&format=RSS&mkt=ja-JP`,
+      url: bingNewsSearchUrl(queries.ja, 'ja-JP'),
       label: `Bing ニュース · ${queries.ja}`,
       limit: compact ? 6 : 10,
     },
@@ -1372,13 +1415,13 @@ function genreSupplementFeeds(
     ...primary,
     {
       genre: id,
-      url: `https://news.google.com/rss/search?q=${en}&hl=en&gl=US&ceid=US:en`,
+      url: googleNewsSearchUrl(queries.en, { hl: 'en', gl: 'US', ceid: 'US:en' }),
       label: `Google News World · ${queries.en}`,
       limit: 8,
     },
     {
       genre: id,
-      url: `https://www.bing.com/news/search?q=${en}&format=RSS&mkt=en-US`,
+      url: bingNewsSearchUrl(queries.en, 'en-US'),
       label: `Bing News World · ${queries.en}`,
       limit: 8,
     },
@@ -1388,17 +1431,16 @@ function genreSupplementFeeds(
 function feedsForGenre(id: GenreId, compact = false): FeedSource[] {
   if (isSearchGenre(id)) {
     const query = labelFromGenreId(id)
-    const encoded = encodeURIComponent(query)
     const primary: FeedSource[] = [
       {
         genre: id,
-        url: `https://www.bing.com/news/search?q=${encoded}&format=RSS&mkt=ja-JP`,
+        url: bingNewsSearchUrl(query, 'ja-JP'),
         label: `Bing ニュース · ${query}`,
         limit: compact ? 10 : 10,
       },
       {
         genre: id,
-        url: `https://news.google.com/rss/search?q=${encoded}&hl=ja&gl=JP&ceid=JP:ja`,
+        url: googleNewsSearchUrl(query, { hl: 'ja', gl: 'JP', ceid: 'JP:ja' }),
         label: `Google ニュース · ${query}`,
         limit: compact ? 8 : 10,
       },
@@ -1410,7 +1452,7 @@ function feedsForGenre(id: GenreId, compact = false): FeedSource[] {
         ...primary,
         {
           genre: id,
-          url: `https://news.google.com/rss/search?q=${encoded}&hl=en&gl=US&ceid=US:en`,
+          url: googleNewsSearchUrl(query, { hl: 'en', gl: 'US', ceid: 'US:en' }),
           label: `Google News World · ${query}`,
           limit: 6,
         },
@@ -1427,13 +1469,13 @@ function feedsForGenre(id: GenreId, compact = false): FeedSource[] {
       ...primary,
       {
         genre: id,
-        url: `https://www.bing.com/news/search?q=${encoded}&format=RSS&mkt=en-US`,
+        url: bingNewsSearchUrl(query, 'en-US'),
         label: `Bing News World · ${query}`,
         limit: 10,
       },
       {
         genre: id,
-        url: `https://news.google.com/rss/search?q=${encoded}&hl=en&gl=US&ceid=US:en`,
+        url: googleNewsSearchUrl(query, { hl: 'en', gl: 'US', ceid: 'US:en' }),
         label: `Google News World · ${query}`,
         limit: 8,
       },
@@ -1441,7 +1483,7 @@ function feedsForGenre(id: GenreId, compact = false): FeedSource[] {
         const market = isDomesticHost(site.host) ? 'ja-JP' : 'en-US'
         return {
           genre: id,
-          url: `https://www.bing.com/news/search?q=${encodeURIComponent(`${query} site:${site.host}`)}&format=RSS&mkt=${market}`,
+          url: bingNewsSearchUrl(`${query} site:${site.host}`, market),
           label: site.label,
           limit: 4,
         }
