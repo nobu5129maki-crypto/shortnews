@@ -4,8 +4,8 @@ import type { GenreId, NewsApiResponse, NewsItem } from '../types'
 
 const REFRESH_MS = 3 * 60 * 1000
 const FETCH_TIMEOUT_MS = 28_000
-/** スワイプが成立する最低本数。足りなければデモ記事で補完する */
-const MIN_SWIPE_ITEMS = 20
+/** ジャンル内の最低本数。足りなければ同じジャンルのデモで補完 */
+const MIN_SWIPE_ITEMS = 12
 
 type LiveNewsState = {
   items: NewsItem[]
@@ -48,29 +48,35 @@ function mergeUnique(parts: NewsItem[][]): NewsItem[] {
   )
 }
 
+/** 選択ジャンルに属する記事だけ（他ジャンルのデモは混ぜない） */
 function fallbackFor(selected: GenreId[]): NewsItem[] {
-  const matched = fallbackNews.filter((item) => selected.includes(item.genre))
-  if (matched.length >= MIN_SWIPE_ITEMS) return matched
-  // 検索ジャンルなどデモが薄い場合は全デモで本数を確保
-  return mergeUnique([matched, fallbackNews]).slice(0, Math.max(MIN_SWIPE_ITEMS, matched.length))
+  return fallbackNews.filter((item) => selected.includes(item.genre))
+}
+
+function scopeToGenres(items: NewsItem[], selected: GenreId[]): NewsItem[] {
+  if (selected.length === 0) return []
+  const allowed = new Set(selected)
+  return items.filter((item) => allowed.has(item.genre))
 }
 
 function ensureVolume(live: NewsItem[], selected: GenreId[]): {
   items: NewsItem[]
   source: 'live' | 'fallback' | 'mixed'
 } {
+  const scoped = scopeToGenres(live, selected)
   const demo = fallbackFor(selected)
-  if (live.length === 0) {
+
+  if (scoped.length === 0) {
     return { items: demo, source: 'fallback' }
   }
-  if (live.length >= MIN_SWIPE_ITEMS) {
-    return { items: live, source: 'live' }
+  if (scoped.length >= MIN_SWIPE_ITEMS || demo.length === 0) {
+    return {
+      items: scoped,
+      source: 'live',
+    }
   }
   return {
-    items: mergeUnique([live, demo]).slice(
-      0,
-      Math.max(MIN_SWIPE_ITEMS, live.length + 8),
-    ),
+    items: mergeUnique([scoped, demo]),
     source: 'mixed',
   }
 }
@@ -94,8 +100,8 @@ async function fetchGenreNews(
     if (!response.ok) throw new Error(`HTTP ${response.status}`)
     const data = (await response.json()) as NewsApiResponse
     if (!Array.isArray(data.items)) throw new Error('invalid news')
-    const matched = data.items.filter((item) => item.genre === genre)
-    return matched.length > 0 ? matched : data.items
+    // 指定ジャンルの記事だけ返す（他ジャンル混入を防ぐ）
+    return data.items.filter((item) => item.genre === genre)
   } finally {
     window.clearTimeout(timer)
     signal.removeEventListener('abort', onParentAbort)
@@ -135,14 +141,8 @@ export function useLiveNews(myGenres: GenreId[]): LiveNewsState {
     abortRef.current = controller
     const currentRequest = ++requestId.current
 
-    // 初回だけデモで先埋め。既存の記事は消さない（スワイプ途中の喪失を防ぐ）
-    if (!hasLive.current) {
-      setItems((prev) => {
-        if (prev.length >= MIN_SWIPE_ITEMS) return prev
-        return ensureVolume(prev, selected).items
-      })
-      setSource((prev) => (prev === 'live' ? prev : 'fallback'))
-    }
+    // ジャンル変更直後は選択外を即座に落とし、選択ジャンルのデモで先埋め
+    setItems((prev) => ensureVolume(scopeToGenres(prev, selected), selected).items)
 
     setRefreshing(true)
     try {
@@ -187,7 +187,8 @@ export function useLiveNews(myGenres: GenreId[]): LiveNewsState {
       console.error(err)
       setError('最新ニュースを取得できませんでした。再試行できます。')
       setItems((prev) => {
-        if (prev.length > 0) return prev
+        const scoped = scopeToGenres(prev, selected)
+        if (scoped.length > 0) return scoped
         return ensureVolume([], selected).items
       })
       if (!hasLive.current) setSource('fallback')

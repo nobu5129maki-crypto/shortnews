@@ -20,15 +20,14 @@ type Props = {
   onRemoveGenre: (id: GenreId) => void
 }
 
-/** 選択中ジャンルを先頭に、他ジャンル／補完記事も続けてスワイプできる */
+/** 表示中ジャンルの記事だけを返す（他ジャンルを混ぜない） */
 function buildFeedItems(tab: GenreId, liveItems: NewsItem[]): NewsItem[] {
-  const primary = liveItems.filter((item) => item.genre === tab)
-  const rest = liveItems.filter((item) => item.genre !== tab)
-  return [...primary, ...rest]
+  return liveItems.filter((item) => item.genre === tab)
 }
 
 export function Feed({ myGenres, onAddGenre, onRemoveGenre }: Props) {
   const feedRef = useRef<HTMLDivElement>(null)
+  const prevGenresRef = useRef<GenreId[]>([])
   const [tab, setTab] = useState<GenreId | null>(null)
   const [liked, setLiked] = useState<Record<string, boolean>>({})
   const [saved, setSaved] = useState<Record<string, boolean>>({})
@@ -55,10 +54,7 @@ export function Feed({ myGenres, onAddGenre, onRemoveGenre }: Props) {
     return buildFeedItems(activeTab, liveItems)
   }, [activeTab, liveItems, myGenres.length])
 
-  const primaryCount = useMemo(() => {
-    if (!activeTab) return 0
-    return liveItems.filter((item) => item.genre === activeTab).length
-  }, [liveItems, activeTab])
+  const primaryCount = items.length
 
   const continueGenres = useMemo(() => {
     if (!activeTab) return []
@@ -73,7 +69,10 @@ export function Feed({ myGenres, onAddGenre, onRemoveGenre }: Props) {
       .sort((a, b) => Number(b.hasNew) - Number(a.hasNew) || b.count - a.count)
   }, [barGenres, activeTab, liveItems, newGenreIds])
 
-  const showContinue = Boolean(activeTab) && myGenres.length > 0 && !loading
+  const awaitingGenre =
+    Boolean(activeTab) && items.length === 0 && (loading || refreshing)
+  const showContinue =
+    Boolean(activeTab) && myGenres.length > 0 && !awaitingGenre && !loading
   const slideCount = items.length + (showContinue ? 1 : 0)
   const activeIndex = useActiveSlide(
     feedRef,
@@ -81,20 +80,30 @@ export function Feed({ myGenres, onAddGenre, onRemoveGenre }: Props) {
     `${activeTab ?? 'none'}:${slideCount}`,
   )
 
+  // 新規ジャンル追加時はそのタブへ切替。削除時は残存ジャンルへ。
   useEffect(() => {
+    const prev = prevGenresRef.current
+    const added = myGenres.filter((id) => !prev.includes(id))
+    prevGenresRef.current = myGenres
+
     if (myGenres.length === 0) {
       setTab(null)
+      return
+    }
+    if (added.length > 0) {
+      setTab(added[added.length - 1])
+      setShowHint(true)
       return
     }
     if (!tab || !myGenreSet.has(tab)) {
       setTab(myGenres[0])
     }
-  }, [tab, myGenreSet, myGenres])
+  }, [myGenres, myGenreSet, tab])
 
   useEffect(() => {
     if (!activeTab) return
     markGenreSeen(activeTab)
-  }, [activeTab, liveItems, markGenreSeen])
+  }, [activeTab, items, markGenreSeen])
 
   useEffect(() => {
     const node = feedRef.current
@@ -233,6 +242,13 @@ export function Feed({ myGenres, onAddGenre, onRemoveGenre }: Props) {
     setShowHint(true)
   }
 
+  const handleAddGenre = (id: GenreId) => {
+    onAddGenre(id)
+    setTab(id)
+    setShowHint(true)
+    setEditorOpen(false)
+  }
+
   const currentLabel =
     barGenres.find((genre) => genre.id === activeTab)?.label ?? 'このジャンル'
 
@@ -312,20 +328,18 @@ export function Feed({ myGenres, onAddGenre, onRemoveGenre }: Props) {
       >
         {myGenres.length === 0 ? (
           <div className="empty-state empty-state-search">
-            <GenreSearch myGenres={myGenres} onAdd={onAddGenre} autofocus />
+            <GenreSearch myGenres={myGenres} onAdd={handleAddGenre} autofocus />
+          </div>
+        ) : awaitingGenre ? (
+          <div className="empty-state">
+            <p>ニュースを取得中です</p>
           </div>
         ) : items.length === 0 && !showContinue ? (
           <div className="empty-state">
-            <p>
-              {loading
-                ? 'ニュースを取得中です'
-                : 'このジャンルのニュースはまだありません'}
-            </p>
-            {!loading && (
-              <button type="button" className="empty-cta" onClick={() => setEditorOpen(true)}>
-                設定
-              </button>
-            )}
+            <p>このジャンルのニュースはまだありません</p>
+            <button type="button" className="empty-cta" onClick={() => setEditorOpen(true)}>
+              設定
+            </button>
           </div>
         ) : (
           <>
@@ -367,7 +381,7 @@ export function Feed({ myGenres, onAddGenre, onRemoveGenre }: Props) {
         open={editorOpen}
         selected={myGenres}
         onClose={() => setEditorOpen(false)}
-        onAdd={onAddGenre}
+        onAdd={handleAddGenre}
         onRemove={onRemoveGenre}
       />
     </div>
