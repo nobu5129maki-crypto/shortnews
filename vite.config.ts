@@ -76,7 +76,7 @@ export default defineConfig({
             urlPattern: /^https:\/\/fonts\.googleapis\.com\/.*/i,
             handler: 'CacheFirst',
             options: {
-              cacheName: 'google-fonts-stylesheets-v2',
+              cacheName: 'google-fonts-stylesheets-v3',
               expiration: { maxEntries: 8, maxAgeSeconds: 60 * 60 * 24 * 365 },
             },
           },
@@ -84,7 +84,7 @@ export default defineConfig({
             urlPattern: /^https:\/\/fonts\.gstatic\.com\/.*/i,
             handler: 'CacheFirst',
             options: {
-              cacheName: 'google-fonts-webfonts-v2',
+              cacheName: 'google-fonts-webfonts-v3',
               expiration: { maxEntries: 16, maxAgeSeconds: 60 * 60 * 24 * 365 },
             },
           },

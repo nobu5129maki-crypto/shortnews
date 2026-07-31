@@ -25,13 +25,29 @@ function buildFeedItems(tab: GenreId, liveItems: NewsItem[]): NewsItem[] {
   return liveItems.filter((item) => item.genre === tab)
 }
 
+/** API由来の本番記事（デモ補完は除外） */
+function isLiveArticle(item: NewsItem): boolean {
+  return item.id.startsWith('live-')
+}
+
+/**
+ * スワイプ案内用の本数。
+ * 本番記事が1本でもある場合はデモを数に入れない（「1本なのに案内が出る」を防ぐ）。
+ * フォールバックのみのときはデモ本数を使う。
+ */
+function countSwipeNews(items: NewsItem[]): number {
+  const liveCount = items.filter(isLiveArticle).length
+  if (liveCount > 0) return liveCount
+  return items.length
+}
+
 export function Feed({ myGenres, onAddGenre, onRemoveGenre }: Props) {
   const feedRef = useRef<HTMLDivElement>(null)
   const prevGenresRef = useRef<GenreId[]>([])
   const [tab, setTab] = useState<GenreId | null>(null)
   const [liked, setLiked] = useState<Record<string, boolean>>({})
   const [saved, setSaved] = useState<Record<string, boolean>>({})
-  const [showHint, setShowHint] = useState(true)
+  const [showHint, setShowHint] = useState(false)
   const [editorOpen, setEditorOpen] = useState(false)
   const { items: liveItems, updatedAt, loading, refreshing, error, source, refresh } =
     useLiveNews(myGenres)
@@ -74,7 +90,10 @@ export function Feed({ myGenres, onAddGenre, onRemoveGenre }: Props) {
   const showContinue =
     Boolean(activeTab) && myGenres.length > 0 && !awaitingGenre && !loading
   const slideCount = items.length + (showContinue ? 1 : 0)
-  const canSwipeToNextNews = items.length >= 2
+  const swipeNewsCount = useMemo(() => countSwipeNews(items), [items])
+  // 本番記事が2本以上あるときだけ案内（1本＋デモ補完では出さない）
+  const canSwipeToNextNews =
+    !loading && !awaitingGenre && !editorOpen && swipeNewsCount >= 2
   const activeIndex = useActiveSlide(
     feedRef,
     slideCount,
@@ -100,14 +119,14 @@ export function Feed({ myGenres, onAddGenre, onRemoveGenre }: Props) {
     }
   }, [myGenres, myGenreSet, tab])
 
-  // 記事が1本以下のときはスワイプ案内を出さない
+  // スワイプ可能な本数が揃ってからだけ案内を出す
   useEffect(() => {
     if (!canSwipeToNextNews) {
       setShowHint(false)
       return
     }
     setShowHint(true)
-  }, [activeTab, canSwipeToNextNews])
+  }, [activeTab, canSwipeToNextNews, swipeNewsCount])
 
   useEffect(() => {
     if (!activeTab) return
@@ -382,10 +401,7 @@ export function Feed({ myGenres, onAddGenre, onRemoveGenre }: Props) {
         )}
       </div>
 
-      <SwipeHint
-        visible={showHint && canSwipeToNextNews && !editorOpen && !awaitingGenre}
-        newsCount={items.length}
-      />
+      <SwipeHint enabled={showHint && canSwipeToNextNews} />
 
       <GenreEditor
         open={editorOpen}

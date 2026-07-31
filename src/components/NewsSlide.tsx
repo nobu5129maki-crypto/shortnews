@@ -126,6 +126,7 @@ export function NewsSlide({
     <article
       className={`news-slide${isActive ? ' is-active' : ''}${videoFailed ? ' is-fallback' : ''}`}
       data-slide
+      data-news-slide
       data-index={index}
       aria-hidden={!isActive}
     >
