@@ -20,15 +20,10 @@ type Props = {
   onRemoveGenre: (id: GenreId) => void
 }
 
-/** 選択中ジャンルを先頭に、他ジャンルも続けてスワイプできる一本のレーンにする */
-function buildFeedItems(
-  tab: GenreId,
-  liveItems: NewsItem[],
-  myGenreSet: Set<GenreId>,
-): NewsItem[] {
-  const pool = liveItems.filter((item) => myGenreSet.has(item.genre))
-  const primary = pool.filter((item) => item.genre === tab)
-  const rest = pool.filter((item) => item.genre !== tab)
+/** 選択中ジャンルを先頭に、他ジャンル／補完記事も続けてスワイプできる */
+function buildFeedItems(tab: GenreId, liveItems: NewsItem[]): NewsItem[] {
+  const primary = liveItems.filter((item) => item.genre === tab)
+  const rest = liveItems.filter((item) => item.genre !== tab)
   return [...primary, ...rest]
 }
 
@@ -57,8 +52,8 @@ export function Feed({ myGenres, onAddGenre, onRemoveGenre }: Props) {
 
   const items = useMemo(() => {
     if (!activeTab || myGenres.length === 0) return []
-    return buildFeedItems(activeTab, liveItems, myGenreSet)
-  }, [activeTab, myGenreSet, liveItems, myGenres.length])
+    return buildFeedItems(activeTab, liveItems)
+  }, [activeTab, liveItems, myGenres.length])
 
   const primaryCount = useMemo(() => {
     if (!activeTab) return 0
@@ -164,6 +159,74 @@ export function Feed({ myGenres, onAddGenre, onRemoveGenre }: Props) {
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
   }, [activeIndex, slideCount, feedLocked])
+
+  // 詳細パネル端までスクロールしたら、フィードの次／前へ受け渡す
+  useEffect(() => {
+    const feed = feedRef.current
+    if (!feed || feedLocked) return
+
+    const onWheel = (event: WheelEvent) => {
+      const target = event.target
+      if (!(target instanceof Element)) return
+      const meta = target.closest('[data-slide-meta]')
+      if (!(meta instanceof HTMLElement)) return
+
+      const atTop = meta.scrollTop <= 0
+      const atBottom =
+        meta.scrollTop + meta.clientHeight >= meta.scrollHeight - 2
+      if ((event.deltaY < 0 && atTop) || (event.deltaY > 0 && atBottom)) {
+        event.preventDefault()
+        feed.scrollTop += event.deltaY
+      }
+    }
+
+    let lastY = 0
+    let tracking: HTMLElement | null = null
+
+    const onTouchStart = (event: TouchEvent) => {
+      const target = event.target
+      if (!(target instanceof Element)) return
+      const meta = target.closest('[data-slide-meta]')
+      if (!(meta instanceof HTMLElement)) {
+        tracking = null
+        return
+      }
+      tracking = meta
+      lastY = event.touches[0]?.clientY ?? 0
+    }
+
+    const onTouchMove = (event: TouchEvent) => {
+      if (!tracking) return
+      const y = event.touches[0]?.clientY ?? lastY
+      const dy = lastY - y
+      lastY = y
+      const atTop = tracking.scrollTop <= 0
+      const atBottom =
+        tracking.scrollTop + tracking.clientHeight >= tracking.scrollHeight - 2
+      if ((dy < 0 && atTop) || (dy > 0 && atBottom)) {
+        event.preventDefault()
+        feed.scrollTop += dy
+      }
+    }
+
+    const onTouchEnd = () => {
+      tracking = null
+      lastY = 0
+    }
+
+    feed.addEventListener('wheel', onWheel, { passive: false })
+    feed.addEventListener('touchstart', onTouchStart, { passive: true })
+    feed.addEventListener('touchmove', onTouchMove, { passive: false })
+    feed.addEventListener('touchend', onTouchEnd)
+    feed.addEventListener('touchcancel', onTouchEnd)
+    return () => {
+      feed.removeEventListener('wheel', onWheel)
+      feed.removeEventListener('touchstart', onTouchStart)
+      feed.removeEventListener('touchmove', onTouchMove)
+      feed.removeEventListener('touchend', onTouchEnd)
+      feed.removeEventListener('touchcancel', onTouchEnd)
+    }
+  }, [feedLocked, items.length, activeTab])
 
   const onTabChange = (id: GenreId) => {
     setTab(id)

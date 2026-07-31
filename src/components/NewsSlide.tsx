@@ -24,10 +24,12 @@ export function NewsSlide({
   onSave,
 }: Props) {
   const videoRef = useRef<HTMLVideoElement>(null)
+  const metaRef = useRef<HTMLDivElement>(null)
   const [paused, setPaused] = useState(false)
   const [progress, setProgress] = useState(0)
   const [videoFailed, setVideoFailed] = useState(false)
   const [videoReady, setVideoReady] = useState(false)
+  const [metaScrollable, setMetaScrollable] = useState(false)
   const genreLabel = resolveGenre(item.genre).label
   const showKeyPoints =
     item.keyPoints.length > 0 &&
@@ -35,6 +37,10 @@ export function NewsSlide({
       (point) =>
         item.detail.includes(point) || item.detail.includes(`${point}。`),
     )
+  const showSummary =
+    Boolean(item.summary?.trim()) &&
+    item.summary.trim() !== item.detail.trim() &&
+    !item.detail.trim().startsWith(item.summary.trim())
 
   useEffect(() => {
     setVideoFailed(false)
@@ -73,6 +79,24 @@ export function NewsSlide({
     video.addEventListener('timeupdate', onTime)
     return () => video.removeEventListener('timeupdate', onTime)
   }, [isActive, videoFailed])
+
+  useEffect(() => {
+    const node = metaRef.current
+    if (!node) return
+
+    const measure = () => {
+      setMetaScrollable(node.scrollHeight > node.clientHeight + 8)
+    }
+    measure()
+    const observer = new ResizeObserver(measure)
+    observer.observe(node)
+    return () => observer.disconnect()
+  }, [item.id, item.detail, item.keyPoints.length, isActive])
+
+  useEffect(() => {
+    if (!isActive) return
+    metaRef.current?.scrollTo({ top: 0 })
+  }, [isActive, item.id])
 
   const togglePause = () => {
     if (!isActive) return
@@ -152,43 +176,50 @@ export function NewsSlide({
         <span style={{ transform: `scaleX(${videoFailed ? (isActive ? 1 : 0) : progress})` }} />
       </div>
 
-      <div className="slide-meta">
-        <div className="meta-top">
-          <span className="genre-tag">{genreLabel}</span>
-          <span className="meta-time">{formatRelativeTime(item.publishedAt)}</span>
-        </div>
-        <h2 className="slide-title">{item.title}</h2>
-        {showKeyPoints && (
-          <ul className="slide-points">
-            {item.keyPoints.map((point) => (
-              <li key={point}>{point}</li>
-            ))}
-          </ul>
-        )}
-        <p className="slide-detail">{item.detail}</p>
-        {item.related.length > 0 && (
-          <div className="slide-related">
-            <p className="slide-related-label">関連ポイント</p>
-            {item.related.map((topic) => (
-              <div key={topic.id} className="slide-related-item">
-                <p className="slide-related-title">{topic.label}</p>
-                <p className="slide-related-detail">{topic.detail}</p>
-              </div>
-            ))}
+      <div
+        ref={metaRef}
+        className={`slide-meta${metaScrollable ? ' is-scrollable' : ''}`}
+        data-slide-meta
+      >
+        <div className="slide-meta-panel">
+          <div className="meta-top">
+            <span className="genre-tag">{genreLabel}</span>
+            <span className="meta-time">{formatRelativeTime(item.publishedAt)}</span>
           </div>
-        )}
-        <p className="slide-source">{item.source}</p>
-        {item.url && (
-          <a
-            className="slide-link"
-            href={item.url}
-            target="_blank"
-            rel="noopener noreferrer"
-            onClick={(event) => event.stopPropagation()}
-          >
-            元記事を読む
-          </a>
-        )}
+          <h2 className="slide-title">{item.title}</h2>
+          {showSummary && <p className="slide-summary">{item.summary}</p>}
+          {showKeyPoints && (
+            <ul className="slide-points">
+              {item.keyPoints.map((point) => (
+                <li key={point}>{point}</li>
+              ))}
+            </ul>
+          )}
+          <p className="slide-detail">{item.detail}</p>
+          {item.related.length > 0 && (
+            <div className="slide-related">
+              <p className="slide-related-label">関連ポイント</p>
+              {item.related.map((topic) => (
+                <div key={topic.id} className="slide-related-item">
+                  <p className="slide-related-title">{topic.label}</p>
+                  <p className="slide-related-detail">{topic.detail}</p>
+                </div>
+              ))}
+            </div>
+          )}
+          <p className="slide-source">{item.source}</p>
+          {item.url && (
+            <a
+              className="slide-link"
+              href={item.url}
+              target="_blank"
+              rel="noopener noreferrer"
+              onClick={(event) => event.stopPropagation()}
+            >
+              元記事を読む
+            </a>
+          )}
+        </div>
       </div>
 
       <ActionRail

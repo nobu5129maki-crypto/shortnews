@@ -63,6 +63,7 @@ export default defineConfig({
         ],
       },
       workbox: {
+        cleanupOutdatedCaches: true,
         navigateFallback: '/index.html',
         globPatterns: ['**/*.{js,css,html,svg,png,ico,webp,woff2}'],
         runtimeCaching: [
@@ -75,7 +76,7 @@ export default defineConfig({
             urlPattern: /^https:\/\/fonts\.googleapis\.com\/.*/i,
             handler: 'CacheFirst',
             options: {
-              cacheName: 'google-fonts-stylesheets',
+              cacheName: 'google-fonts-stylesheets-v2',
               expiration: { maxEntries: 8, maxAgeSeconds: 60 * 60 * 24 * 365 },
             },
           },
@@ -83,7 +84,7 @@ export default defineConfig({
             urlPattern: /^https:\/\/fonts\.gstatic\.com\/.*/i,
             handler: 'CacheFirst',
             options: {
-              cacheName: 'google-fonts-webfonts',
+              cacheName: 'google-fonts-webfonts-v2',
               expiration: { maxEntries: 16, maxAgeSeconds: 60 * 60 * 24 * 365 },
             },
           },

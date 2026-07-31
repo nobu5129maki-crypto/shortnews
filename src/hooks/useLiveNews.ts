@@ -3,8 +3,9 @@ import { newsItems as fallbackNews } from '../data/news'
 import type { GenreId, NewsApiResponse, NewsItem } from '../types'
 
 const REFRESH_MS = 3 * 60 * 1000
+const FETCH_TIMEOUT_MS = 28_000
 /** スワイプが成立する最低本数。足りなければデモ記事で補完する */
-const MIN_SWIPE_ITEMS = 12
+const MIN_SWIPE_ITEMS = 20
 
 type LiveNewsState = {
   items: NewsItem[]
@@ -41,12 +42,17 @@ function mergeUnique(parts: NewsItem[][]): NewsItem[] {
   }
 
   return merged.sort(
-    (a, b) => timeValue(b.publishedAt) - timeValue(a.publishedAt) || b.id.localeCompare(a.id),
+    (a, b) =>
+      timeValue(b.publishedAt) - timeValue(a.publishedAt) ||
+      b.id.localeCompare(a.id),
   )
 }
 
 function fallbackFor(selected: GenreId[]): NewsItem[] {
-  return fallbackNews.filter((item) => selected.includes(item.genre))
+  const matched = fallbackNews.filter((item) => selected.includes(item.genre))
+  if (matched.length >= MIN_SWIPE_ITEMS) return matched
+  // 検索ジャンルなどデモが薄い場合は全デモで本数を確保
+  return mergeUnique([matched, fallbackNews]).slice(0, Math.max(MIN_SWIPE_ITEMS, matched.length))
 }
 
 function ensureVolume(live: NewsItem[], selected: GenreId[]): {
@@ -61,7 +67,10 @@ function ensureVolume(live: NewsItem[], selected: GenreId[]): {
     return { items: live, source: 'live' }
   }
   return {
-    items: mergeUnique([live, demo]),
+    items: mergeUnique([live, demo]).slice(
+      0,
+      Math.max(MIN_SWIPE_ITEMS, live.length + 8),
+    ),
     source: 'mixed',
   }
 }
@@ -72,15 +81,25 @@ async function fetchGenreNews(
 ): Promise<NewsItem[]> {
   const params = new URLSearchParams()
   params.append('g', genre)
-  const response = await fetch(`/api/news?${params}`, {
-    headers: { Accept: 'application/json' },
-    cache: 'no-store',
-    signal,
-  })
-  if (!response.ok) throw new Error(`HTTP ${response.status}`)
-  const data = (await response.json()) as NewsApiResponse
-  if (!Array.isArray(data.items)) throw new Error('invalid news')
-  return data.items.filter((item) => item.genre === genre)
+  const timeoutController = new AbortController()
+  const timer = window.setTimeout(() => timeoutController.abort(), FETCH_TIMEOUT_MS)
+  const onParentAbort = () => timeoutController.abort()
+  signal.addEventListener('abort', onParentAbort)
+  try {
+    const response = await fetch(`/api/news?${params}`, {
+      headers: { Accept: 'application/json' },
+      cache: 'no-store',
+      signal: timeoutController.signal,
+    })
+    if (!response.ok) throw new Error(`HTTP ${response.status}`)
+    const data = (await response.json()) as NewsApiResponse
+    if (!Array.isArray(data.items)) throw new Error('invalid news')
+    const matched = data.items.filter((item) => item.genre === genre)
+    return matched.length > 0 ? matched : data.items
+  } finally {
+    window.clearTimeout(timer)
+    signal.removeEventListener('abort', onParentAbort)
+  }
 }
 
 export function useLiveNews(myGenres: GenreId[]): LiveNewsState {
@@ -116,16 +135,17 @@ export function useLiveNews(myGenres: GenreId[]): LiveNewsState {
     abortRef.current = controller
     const currentRequest = ++requestId.current
 
-    // 取得中もスワイプできるよう、先にデモで埋める
+    // 初回だけデモで先埋め。既存の記事は消さない（スワイプ途中の喪失を防ぐ）
     if (!hasLive.current) {
-      const seeded = ensureVolume([], selected)
-      setItems(seeded.items)
-      setSource(seeded.source)
+      setItems((prev) => {
+        if (prev.length >= MIN_SWIPE_ITEMS) return prev
+        return ensureVolume(prev, selected).items
+      })
+      setSource((prev) => (prev === 'live' ? prev : 'fallback'))
     }
 
     setRefreshing(true)
     try {
-      // ジャンルごとに並列取得（1ジャンルあたりのソース量を最大化し、Edgeタイムアウトを避ける）
       const settled = await Promise.allSettled(
         selected.map((genre) => fetchGenreNews(genre, controller.signal)),
       )
@@ -166,11 +186,11 @@ export function useLiveNews(myGenres: GenreId[]): LiveNewsState {
       }
       console.error(err)
       setError('最新ニュースを取得できませんでした。再試行できます。')
-      if (!hasLive.current) {
-        const seeded = ensureVolume([], selected)
-        setItems(seeded.items)
-        setSource(seeded.source)
-      }
+      setItems((prev) => {
+        if (prev.length > 0) return prev
+        return ensureVolume([], selected).items
+      })
+      if (!hasLive.current) setSource('fallback')
     } finally {
       if (currentRequest === requestId.current) {
         setLoading(false)
