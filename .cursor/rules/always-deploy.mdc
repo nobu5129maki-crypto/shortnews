@@ -1,0 +1,27 @@
+---
+description: Every code change must ship to GitHub and Vercel Production
+alwaysApply: true
+---
+
+# Always ship to GitHub + Vercel
+
+For **every** MYLINE / shortnews code change in this repository, complete the full upload path before finishing the turn. Do not leave fixes only on a local or preview branch.
+
+## Required pipeline (every change)
+
+1. **Build** — `npm run lint` and `npm run build` when code changed
+2. **Commit** — stage and commit with a clear message
+3. **Push branch** — `git push -u origin <branch>`
+4. **Production upload** — merge/fast-forward into `main` and `git push origin main`
+5. **Vercel** — Production deploys automatically from `main` via the Vercel GitHub integration. Also run `npx vercel --prod --yes` when a Vercel token is available; if the CLI token is missing, rely on the GitHub→Vercel Production deploy and wait until it succeeds
+6. **PR** — create/update the PR for the feature branch; keep `main` as the production source of truth
+
+## Do not
+
+- End a turn with uncommitted or unpushed fixes
+- Leave production (`main` / https://shortnews-theta.vercel.app) on an older commit when the fix is ready
+- Use `git push --force` or `git reset --hard` unless the user explicitly asked for that exact action
+
+## Helper
+
+- Prefer `npm run ship` (or `bash scripts/ship-to-production.sh`) after committing on the working branch to push the branch and update `main`
