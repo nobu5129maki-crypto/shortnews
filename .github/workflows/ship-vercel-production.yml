@@ -6,30 +6,40 @@ on:
       - main
   workflow_dispatch:
 
-# Vercel GitHub integration already deploys Production on main.
-# This workflow makes the ship path explicit and optionally runs the
-# Vercel CLI when repository secrets are configured.
+# Push to main already triggers Vercel Production via the Vercel GitHub app.
+# This workflow documents that path and optionally re-deploys with the CLI
+# when VERCEL_TOKEN / VERCEL_ORG_ID / VERCEL_PROJECT_ID secrets exist.
 jobs:
   production:
     runs-on: ubuntu-latest
     permissions:
       contents: read
-      deployments: write
     steps:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Note GitHub → Vercel auto deploy
+      - name: Confirm GitHub → Vercel Production path
         run: |
-          echo "Push to main triggers Vercel Production via the Vercel GitHub app."
-          echo "Live site: https://shortnews-theta.vercel.app"
+          echo "main push → Vercel Production (GitHub integration)"
+          echo "Live: https://shortnews-theta.vercel.app"
+          echo "Commit: ${GITHUB_SHA}"
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
 
       - name: Optional Vercel CLI production deploy
-        if: ${{ secrets.VERCEL_TOKEN != '' && secrets.VERCEL_ORG_ID != '' && secrets.VERCEL_PROJECT_ID != '' }}
-        uses: amondnet/vercel-action@v25
-        with:
-          vercel-token: ${{ secrets.VERCEL_TOKEN }}
-          vercel-org-id: ${{ secrets.VERCEL_ORG_ID }}
-          vercel-project-id: ${{ secrets.VERCEL_PROJECT_ID }}
-          vercel-args: '--prod'
-          working-directory: ./
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+          VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+          VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
+        run: |
+          if [ -z "${VERCEL_TOKEN}" ] || [ -z "${VERCEL_ORG_ID}" ] || [ -z "${VERCEL_PROJECT_ID}" ]; then
+            echo "Vercel secrets not set. Relying on Vercel GitHub integration for Production."
+            exit 0
+          fi
+          npm install --global vercel@latest
+          vercel pull --yes --environment=production --token="$VERCEL_TOKEN"
+          vercel build --prod --token="$VERCEL_TOKEN"
+          vercel deploy --prebuilt --prod --token="$VERCEL_TOKEN"
