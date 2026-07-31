@@ -31,16 +31,21 @@ export function NewsSlide({
   const [videoReady, setVideoReady] = useState(false)
   const [metaScrollable, setMetaScrollable] = useState(false)
   const genreLabel = resolveGenre(item.genre).label
+  const detailText = item.detail?.trim() ?? ''
+  const summaryText = item.summary?.trim() ?? ''
   const showKeyPoints =
     item.keyPoints.length > 0 &&
     !item.keyPoints.every(
       (point) =>
-        item.detail.includes(point) || item.detail.includes(`${point}。`),
+        detailText.includes(point) || detailText.includes(`${point}。`),
     )
   const showSummary =
-    Boolean(item.summary?.trim()) &&
-    item.summary.trim() !== item.detail.trim() &&
-    !item.detail.trim().startsWith(item.summary.trim())
+    Boolean(summaryText) &&
+    summaryText !== detailText &&
+    !detailText.startsWith(summaryText)
+  const showDetail = Boolean(detailText)
+  const showDetailLabel =
+    showDetail && (showSummary || showKeyPoints || detailText.length >= 160)
 
   useEffect(() => {
     setVideoFailed(false)
@@ -188,7 +193,7 @@ export function NewsSlide({
             <span className="meta-time">{formatRelativeTime(item.publishedAt)}</span>
           </div>
           <h2 className="slide-title">{item.title}</h2>
-          {showSummary && <p className="slide-summary">{item.summary}</p>}
+          {showSummary && <p className="slide-summary">{summaryText}</p>}
           {showKeyPoints && (
             <ul className="slide-points">
               {item.keyPoints.map((point) => (
@@ -196,7 +201,12 @@ export function NewsSlide({
               ))}
             </ul>
           )}
-          <p className="slide-detail">{item.detail}</p>
+          {showDetail && (
+            <>
+              {showDetailLabel && <p className="slide-detail-label">詳細</p>}
+              <p className="slide-detail">{detailText}</p>
+            </>
+          )}
           {item.related.length > 0 && (
             <div className="slide-related">
               <p className="slide-related-label">関連ポイント</p>

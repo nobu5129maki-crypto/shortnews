@@ -316,6 +316,25 @@ export type EnrichResult = {
   resolvedUrl?: string
 }
 
+export type EnrichOptions = {
+  /**
+   * true: 元記事HTML/Jinaまで取って詳細文を厚くする（最新枠向け）
+   * false: Edgeタイムアウト回避の軽量パス
+   */
+  deep?: boolean
+}
+
+/** 詳細として十分な本文か（要約1文では不足） */
+function hasSubstantialDetail(text: string, title = ''): boolean {
+  const cleaned = usableText(text)
+  if (!cleaned) return false
+  if (title && isThinDetail(cleaned, title)) return false
+  if (cleaned.length < 180) return false
+  // 文が2つ以上、または十分な段落
+  const sentences = cleaned.split(/(?<=[。．.！？!?])\s*/).filter((part) => part.trim().length >= 12)
+  return sentences.length >= 2 || cleaned.length >= 320
+}
+
 /**
  * RSS本文が短い／途中切れのとき、元記事ページから本文を補完する。
  * Google News リンクは Bing 経由で実記事 URL に解決してから取得する。
@@ -324,22 +343,25 @@ export async function enrichArticleBody(
   url: string | undefined,
   current: string,
   title = '',
+  options: EnrichOptions = {},
 ): Promise<EnrichResult> {
+  const deep = Boolean(options.deep)
   const base = usableText(current)
   const thin = title ? isThinDetail(base, title) : !base
   const truncated = looksTruncated(base)
   if (!url && !title) {
     return { detail: softTrimTruncation(base) }
   }
-  if (base.length >= 900 && !truncated) {
-    return { detail: base, resolvedUrl: url }
+  // すでに十分な本文があるときだけ即返す
+  if (base.length >= (deep ? 1200 : 900) && !truncated && hasSubstantialDetail(base, title)) {
+    return { detail: softTrimTruncation(base.slice(0, 4500)), resolvedUrl: url }
   }
 
   let target = url ? unwrapNestedUrl(url) : ''
   let resolvedUrl = target || undefined
   let candidate = base
 
-  if ((!target || isGoogleNewsUrl(target) || thin || truncated) && title) {
+  if ((!target || isGoogleNewsUrl(target) || thin || truncated || deep) && title) {
     const viaBing = await resolveViaBing(title)
     if (viaBing?.url) {
       target = viaBing.url
@@ -350,11 +372,21 @@ export async function enrichArticleBody(
     }
   }
 
-  // Bing 説明で十分読める長さなら、重い HTML/Jina を省略（Edge タイムアウト回避）
-  if (candidate.length >= 260 && !looksTruncated(candidate)) {
-    return { detail: softTrimTruncation(candidate), resolvedUrl }
-  }
-  if (candidate.length >= 220 && (!target || isGoogleNewsUrl(target))) {
+  // 軽量パス: 読める長さなら HTML を省略。deep 時は短い要約で止めない
+  if (!deep) {
+    if (hasSubstantialDetail(candidate, title) && !looksTruncated(candidate)) {
+      return { detail: softTrimTruncation(candidate), resolvedUrl }
+    }
+    if (candidate.length >= 220 && (!target || isGoogleNewsUrl(target))) {
+      return { detail: softTrimTruncation(candidate), resolvedUrl }
+    }
+  } else if (
+    hasSubstantialDetail(candidate, title) &&
+    candidate.length >= 700 &&
+    !looksTruncated(candidate) &&
+    (!target || isGoogleNewsUrl(target))
+  ) {
+    // deep でも実URLが取れず、すでに長い本文がある場合のみ返す
     return { detail: softTrimTruncation(candidate), resolvedUrl }
   }
 
@@ -366,11 +398,13 @@ export async function enrichArticleBody(
     const html = await fetchHtml(target)
     let extracted = html ? extractFromHtml(html) : ''
 
-    // HTML で足りないときだけ Jina（時間のかかる経路）
-    if (
-      (!extracted || extracted.length < 180 || looksTruncated(extracted)) &&
-      candidate.length < 220
-    ) {
+    // HTML が薄い／deep 指定時は Jina で本文を補強
+    const needJina =
+      !extracted ||
+      extracted.length < (deep ? 280 : 180) ||
+      looksTruncated(extracted) ||
+      (deep && !hasSubstantialDetail(extracted, title))
+    if (needJina && (deep || candidate.length < 280)) {
       const jina = await fetchViaJina(target)
       if (jina) {
         extracted = pickBestText([extracted, jina], title, extracted)

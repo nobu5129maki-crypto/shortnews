@@ -1122,12 +1122,15 @@ async function toNewsItem(
   genre: GenreId,
   sourceLabel: string,
   feedUrl = '',
+  deep = false,
 ): Promise<NewsItem | null> {
   const seed = hashId(item.link || item.title)
   let description = cleanDetailText(item.description || '')
   if (isBoilerplateDetail(description)) description = ''
 
-  const enriched = await enrichArticleBody(item.link, description, item.title)
+  const enriched = await enrichArticleBody(item.link, description, item.title, {
+    deep,
+  })
   description = cleanDetailText(enriched.detail)
   if (isBoilerplateDetail(description)) description = ''
 
@@ -1350,15 +1353,31 @@ function balanceByGenre(
   const picked: NewsItem[] = []
   for (const list of groups.values()) {
     const fresh = preferFresh(list, (item) => item.publishedAt, 8)
-    fresh.sort(
-      (a, b) => pubTime(b.publishedAt) - pubTime(a.publishedAt),
-    )
+    // 新しい順を主、詳細の厚さを副キーに（タイトルだけの薄い記事を後ろへ）
+    fresh.sort((a, b) => {
+      const byDate = pubTime(b.publishedAt) - pubTime(a.publishedAt)
+      if (byDate !== 0) return byDate
+      return detailWeight(b) - detailWeight(a)
+    })
     picked.push(...fresh.slice(0, dynamicPerGenre))
   }
 
   return preferFresh(picked, (item) => item.publishedAt, 12)
-    .sort((a, b) => pubTime(b.publishedAt) - pubTime(a.publishedAt))
+    .sort((a, b) => {
+      const byDate = pubTime(b.publishedAt) - pubTime(a.publishedAt)
+      if (byDate !== 0) return byDate
+      return detailWeight(b) - detailWeight(a)
+    })
     .slice(0, dynamicTotal)
+}
+
+function detailWeight(item: NewsItem): number {
+  const detail = item.detail?.trim() ?? ''
+  if (!detail) return 0
+  if (isThinDetail(detail, item.title)) return 1
+  if (detail.length >= 400) return 4
+  if (detail.length >= 180) return 3
+  return 2
 }
 
 function isDomesticHost(host: string): boolean {
@@ -1574,16 +1593,38 @@ export async function fetchLatestNews(
       : collected
 
   const shortlisted = balanceCandidates(dedupeCandidates(scoped))
+    .slice()
+    .sort(
+      (a, b) => pubTime(b.item.pubDate) - pubTime(a.item.pubDate),
+    )
+
+  // 最新枠は deep 補完で詳細文を厚くする。残りは軽量パスで本数を確保
+  const deepCount = Math.min(shortlisted.length, compact ? 18 : 32)
+  const deepList = shortlisted.slice(0, deepCount)
+  const lightList = shortlisted.slice(deepCount)
 
   // 2) 採用候補だけ本文補完（Edge タイムアウト回避）
-  const enriched = await mapSettled(shortlisted, compact ? 4 : 5, (candidate) =>
-    toNewsItem(
-      candidate.item,
-      candidate.genre,
-      candidate.sourceLabel,
-      candidate.feedUrl,
+  const [deepEnriched, lightEnriched] = await Promise.all([
+    mapSettled(deepList, compact ? 3 : 4, (candidate) =>
+      toNewsItem(
+        candidate.item,
+        candidate.genre,
+        candidate.sourceLabel,
+        candidate.feedUrl,
+        true,
+      ),
     ),
-  )
+    mapSettled(lightList, compact ? 4 : 5, (candidate) =>
+      toNewsItem(
+        candidate.item,
+        candidate.genre,
+        candidate.sourceLabel,
+        candidate.feedUrl,
+        false,
+      ),
+    ),
+  ])
+  const enriched = [...deepEnriched, ...lightEnriched]
 
   const newsItems = enriched
     .filter(
