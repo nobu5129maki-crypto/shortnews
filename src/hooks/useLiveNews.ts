@@ -37,6 +37,15 @@ function sortByNewest(items: NewsItem[]): NewsItem[] {
   )
 }
 
+/** 古い → 新しい（上スワイプで最新、下スワイプで過去） */
+function sortByOldest(items: NewsItem[]): NewsItem[] {
+  return [...items].sort(
+    (a, b) =>
+      timeValue(a.publishedAt) - timeValue(b.publishedAt) ||
+      a.id.localeCompare(b.id),
+  )
+}
+
 function mergeUnique(parts: NewsItem[][]): NewsItem[] {
   const seenIds = new Set<string>()
   const seenTitles = new Set<string>()
@@ -52,7 +61,7 @@ function mergeUnique(parts: NewsItem[][]): NewsItem[] {
     }
   }
 
-  return sortByNewest(merged)
+  return sortByOldest(merged)
 }
 
 function readHistory(): HistoryMap {
@@ -138,7 +147,7 @@ function ensureVolume(
   const scopedHistory = scopeToGenres(history, selected)
   const demo = fallbackFor(selected)
 
-  // 新しい本番 → 過去履歴 → デモ、の順でマージ（新しいものが上）
+  // 本番 → 履歴 → デモを統合し、古い→新しい順にする
   const merged = mergeUnique([scopedLive, scopedHistory, demo])
 
   if (scopedLive.length === 0 && scopedHistory.length === 0) {

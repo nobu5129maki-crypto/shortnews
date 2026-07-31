@@ -4,12 +4,16 @@ export function useActiveSlide(
   containerRef: RefObject<HTMLElement | null>,
   itemCount: number,
   resetKey: string | number = '',
+  initialIndex = 0,
 ) {
-  const [activeIndex, setActiveIndex] = useState(0)
+  const [activeIndex, setActiveIndex] = useState(() =>
+    Math.max(0, Math.min(initialIndex, Math.max(itemCount - 1, 0))),
+  )
 
   useEffect(() => {
-    setActiveIndex(0)
-  }, [resetKey])
+    const clamped = Math.max(0, Math.min(initialIndex, Math.max(itemCount - 1, 0)))
+    setActiveIndex(clamped)
+  }, [resetKey, initialIndex, itemCount])
 
   useEffect(() => {
     const root = containerRef.current

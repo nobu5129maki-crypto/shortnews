@@ -70,11 +70,26 @@ export function Feed({ myGenres, onAddGenre, onRemoveGenre }: Props) {
 
   const items = useMemo(() => {
     if (!activeTab || myGenres.length === 0) return []
-    // 新しい順（上＝最新）。下スワイプでより新しい／既読側、上スワイプで過去へ
+    // 古い → 新しい（上スワイプで最新、下スワイプで過去）
     return buildFeedItems(activeTab, liveItems)
   }, [activeTab, liveItems, myGenres.length])
 
   const primaryCount = items.length
+
+  /** タブを開いたときの着地位置：未読の最古 → そこから上スワイプで最新へ。無ければ最新末尾 */
+  const landingIndex = useMemo(() => {
+    if (items.length === 0) return 0
+    if (activeTab) {
+      const unseen = unseenIdsByGenre.get(activeTab)
+      if (unseen && unseen.length > 0) {
+        const indices = unseen
+          .map((id) => items.findIndex((item) => item.id === id))
+          .filter((index) => index >= 0)
+        if (indices.length > 0) return Math.min(...indices)
+      }
+    }
+    return items.length - 1
+  }, [items, activeTab, unseenIdsByGenre])
 
   const continueGenres = useMemo(() => {
     if (!activeTab) return []
@@ -85,7 +100,6 @@ export function Feed({ myGenres, onAddGenre, onRemoveGenre }: Props) {
         count: liveItems.filter((item) => item.genre === genre.id).length,
         hasNew: newGenreIds.has(genre.id),
       }))
-      // 記事が実際にあるジャンルだけ（ドットだけの空ジャンルは出さない）
       .filter((entry) => entry.count > 0)
       .sort((a, b) => Number(b.hasNew) - Number(a.hasNew) || b.count - a.count)
   }, [barGenres, activeTab, liveItems, newGenreIds])
@@ -94,6 +108,7 @@ export function Feed({ myGenres, onAddGenre, onRemoveGenre }: Props) {
     Boolean(activeTab) && items.length === 0 && (loading || refreshing)
   const showContinue =
     Boolean(activeTab) && myGenres.length > 0 && !awaitingGenre && !loading
+  // 続きカードは最新のさらに先（上スワイプ方向）へ
   const slideCount = items.length + (showContinue ? 1 : 0)
   const swipeNewsCount = useMemo(() => countSwipeNews(items), [items])
   const canSwipeToNextNews =
@@ -102,7 +117,12 @@ export function Feed({ myGenres, onAddGenre, onRemoveGenre }: Props) {
     feedRef,
     slideCount,
     `${activeTab ?? 'none'}:${items.map((item) => item.id).join(',')}`,
+    landingIndex,
   )
+  const canGoNewer =
+    activeIndex < items.length - 1 ||
+    (showContinue && activeIndex < slideCount - 1 && activeIndex >= 0)
+  const canGoOlder = activeIndex > 0 && activeIndex < items.length
 
   // 新規ジャンル追加時はそのタブへ切替。削除時は残存ジャンルへ。
   useEffect(() => {
@@ -146,19 +166,14 @@ export function Feed({ myGenres, onAddGenre, onRemoveGenre }: Props) {
     jumpedTabRef.current = null
   }, [activeTab])
 
-  // タブを開いた直後だけ未読／先頭へジャンプ（既読更新では動かさない）
+  // タブを開いた直後だけ着地位置へジャンプ（最新末尾 or 未読の開始）
   useEffect(() => {
     const node = feedRef.current
     if (!node || !activeTab || items.length === 0) return
     if (jumpedTabRef.current === activeTab) return
     jumpedTabRef.current = activeTab
 
-    const unseen = unseenIdsByGenre.get(activeTab)
-    let index = 0
-    if (unseen && unseen.length > 0) {
-      const found = items.findIndex((item) => item.id === unseen[0])
-      if (found >= 0) index = found
-    }
+    const index = Math.max(0, Math.min(landingIndex, items.length - 1))
     if (index <= 0) {
       node.scrollTo({ top: 0, behavior: 'auto' })
       return
@@ -166,7 +181,7 @@ export function Feed({ myGenres, onAddGenre, onRemoveGenre }: Props) {
     node
       .querySelector<HTMLElement>(`[data-index="${index}"]`)
       ?.scrollIntoView({ behavior: 'auto', block: 'start' })
-  }, [activeTab, items, unseenIdsByGenre])
+  }, [activeTab, items, landingIndex])
 
   useEffect(() => {
     if (!showHint) return
@@ -430,7 +445,11 @@ export function Feed({ myGenres, onAddGenre, onRemoveGenre }: Props) {
         )}
       </div>
 
-      <SwipeHint enabled={showHint && canSwipeToNextNews} />
+      <SwipeHint
+        enabled={showHint && canSwipeToNextNews}
+        canGoNewer={canGoNewer && activeIndex < items.length}
+        canGoOlder={canGoOlder}
+      />
 
       <GenreEditor
         open={editorOpen}
