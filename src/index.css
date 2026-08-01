@@ -572,17 +572,27 @@ button {
   top: auto;
   z-index: 20;
   max-height: min(88%, calc(100% - 52px));
-  /* ネストスクロール禁止：画面全体でフィードをスワイプできるようにする */
-  overflow: hidden;
+  overflow-x: hidden;
+  overflow-y: auto;
+  overscroll-behavior-y: contain;
   padding: 0;
-  pointer-events: none;
+  pointer-events: auto;
   touch-action: pan-y;
-  mask-image: linear-gradient(180deg, #000 0%, #000 86%, transparent 100%);
-  -webkit-mask-image: linear-gradient(180deg, #000 0%, #000 86%, transparent 100%);
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(255, 255, 255, 0.28) transparent;
   animation: rise-in 420ms ease both;
 }
 
-.slide-meta .slide-link {
+/* 本文が収まるときはタッチをフィードへ通し、新旧スワイプを妨げない */
+.slide-meta:not(.is-scrollable) {
+  overflow-y: hidden;
+  overscroll-behavior-y: auto;
+  pointer-events: none;
+  touch-action: pan-y;
+}
+
+.slide-meta:not(.is-scrollable) .slide-link {
   pointer-events: auto;
   touch-action: manipulation;
 }
