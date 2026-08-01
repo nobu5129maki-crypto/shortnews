@@ -404,6 +404,13 @@ button {
   touch-action: manipulation;
 }
 
+/* 長文詳細を読んでいる間はフィードスワイプを止め、本文スクロールだけ通す */
+.feed.is-reading-detail {
+  overflow-y: hidden;
+  scroll-snap-type: none;
+  scroll-behavior: auto;
+}
+
 .feed::-webkit-scrollbar {
   display: none;
 }
@@ -582,6 +589,12 @@ button {
   scrollbar-width: thin;
   scrollbar-color: rgba(255, 255, 255, 0.28) transparent;
   animation: rise-in 420ms ease both;
+}
+
+.slide-meta.is-scrollable {
+  /* フィードへのスクロール連鎖を遮断し、長文を最後まで読めるようにする */
+  overscroll-behavior-y: none;
+  touch-action: pan-y;
 }
 
 /* 本文が収まるときはタッチをフィードへ通し、新旧スワイプを妨げない */

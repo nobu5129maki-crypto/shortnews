@@ -241,14 +241,14 @@ export function Feed({ myGenres, onAddGenre, onRemoveGenre }: Props) {
     return () => window.removeEventListener('keydown', onKey)
   }, [activeIndex, slideCount, feedLocked])
 
-  // 詳細パネル上でも、端／速いスワイプならスライド単位で新旧へ移動する
+  // 詳細パネルは本文スクロール優先。端を超えて引き続けたときだけ新旧へ移動する
   useEffect(() => {
     const feed = feedRef.current
     if (!feed || feedLocked) return
 
-    const SWIPE_DISTANCE = 56
-    const SWIPE_VELOCITY = 0.45
-    const EDGE_PX = 2
+    const SWIPE_DISTANCE = 88
+    const SWIPE_VELOCITY = 0.7
+    const EDGE_PX = 6
 
     const isScrollableMeta = (meta: HTMLElement) =>
       meta.classList.contains('is-scrollable') &&
@@ -257,6 +257,14 @@ export function Feed({ myGenres, onAddGenre, onRemoveGenre }: Props) {
     const atMetaTop = (meta: HTMLElement) => meta.scrollTop <= EDGE_PX
     const atMetaBottom = (meta: HTMLElement) =>
       meta.scrollTop + meta.clientHeight >= meta.scrollHeight - EDGE_PX
+
+    const lockFeedForReading = () => {
+      feed.classList.add('is-reading-detail')
+    }
+
+    const unlockFeed = () => {
+      feed.classList.remove('is-reading-detail')
+    }
 
     const currentSlideIndex = () => {
       const slides = Array.from(
@@ -281,6 +289,7 @@ export function Feed({ myGenres, onAddGenre, onRemoveGenre }: Props) {
       const clamped = Math.max(0, Math.min(slideCount - 1, next))
       const slide = feed.querySelector<HTMLElement>(`[data-index="${clamped}"]`)
       if (!slide) return
+      unlockFeed()
       const prevBehavior = feed.style.scrollBehavior
       feed.style.scrollBehavior = 'auto'
       slide.scrollIntoView({ behavior: 'smooth', block: 'start' })
@@ -306,38 +315,51 @@ export function Feed({ myGenres, onAddGenre, onRemoveGenre }: Props) {
       event.preventDefault()
       const now = performance.now()
       if (now < wheelLockUntil) return
-      if (Math.abs(event.deltaY) < 8) return
-      wheelLockUntil = now + 480
+      if (Math.abs(event.deltaY) < 12) return
+      wheelLockUntil = now + 520
       goTo(currentSlideIndex() + (towardNewer ? 1 : -1))
     }
 
     let tracking: HTMLElement | null = null
-    let startY = 0
     let lastY = 0
-    let startTime = 0
-    let feeding = false
-    let accumulated = 0
+    let edgeArmed = false
+    let edgeStartTime = 0
+    let overscroll = 0
+    let direction: 0 | 1 | -1 = 0
+
+    const resetTouch = () => {
+      tracking = null
+      lastY = 0
+      edgeArmed = false
+      edgeStartTime = 0
+      overscroll = 0
+      direction = 0
+      unlockFeed()
+    }
 
     const onTouchStart = (event: TouchEvent) => {
       const target = event.target
-      if (!(target instanceof Element)) return
+      if (!(target instanceof Element)) {
+        resetTouch()
+        return
+      }
       if (target.closest('a, button, [role="button"]')) {
-        tracking = null
-        feeding = false
+        resetTouch()
         return
       }
       const meta = target.closest('[data-slide-meta]')
       if (!(meta instanceof HTMLElement) || !isScrollableMeta(meta)) {
-        tracking = null
-        feeding = false
+        resetTouch()
         return
       }
       tracking = meta
-      startY = event.touches[0]?.clientY ?? 0
-      lastY = startY
-      startTime = performance.now()
-      feeding = false
-      accumulated = 0
+      lastY = event.touches[0]?.clientY ?? 0
+      edgeArmed = false
+      edgeStartTime = 0
+      overscroll = 0
+      direction = 0
+      // 長文読了中にフィードのスナップへ奪われないようロック
+      lockFeedForReading()
     }
 
     const onTouchMove = (event: TouchEvent) => {
@@ -345,63 +367,57 @@ export function Feed({ myGenres, onAddGenre, onRemoveGenre }: Props) {
       const y = event.touches[0]?.clientY ?? lastY
       const dy = lastY - y
       lastY = y
-      const totalDy = startY - y
-      const elapsed = Math.max(performance.now() - startTime, 1)
-      const velocity = totalDy / elapsed
-
-      // 速い／長いスワイプは本文の途中からでもフィード遷移を優先
-      const flickToFeed =
-        Math.abs(velocity) >= SWIPE_VELOCITY ||
-        Math.abs(totalDy) >= SWIPE_DISTANCE * 1.75
+      if (dy === 0) return
 
       const towardNewer = dy > 0
       const towardOlder = dy < 0
-      const atEdge =
-        feeding ||
-        flickToFeed ||
-        (towardOlder && atMetaTop(tracking)) ||
-        (towardNewer && atMetaBottom(tracking))
+      // 本文の途中では常に詳細スクロールを優先（距離・速度では奪わない）
+      const pullingPastEnd =
+        (towardNewer && atMetaBottom(tracking)) ||
+        (towardOlder && atMetaTop(tracking))
 
-      if (!atEdge) {
-        accumulated = 0
+      if (!pullingPastEnd) {
+        overscroll = 0
+        direction = 0
+        edgeArmed = false
+        edgeStartTime = 0
         return
       }
 
-      // 端・フリックは詳細内スクロールを止め、フィード遷移の意図として積む
+      // 端を超えた引き込みだけを記事切替候補にする
       event.preventDefault()
-      feeding = true
-      accumulated += dy
-      const prevBehavior = feed.style.scrollBehavior
-      feed.style.scrollBehavior = 'auto'
-      feed.scrollTop += dy
-      feed.style.scrollBehavior = prevBehavior
+      if (!edgeArmed) {
+        edgeArmed = true
+        edgeStartTime = performance.now()
+      }
+      overscroll += dy
+      direction = towardNewer ? 1 : -1
     }
 
     const finishTouch = () => {
       if (!tracking) return
-      const elapsed = Math.max(performance.now() - startTime, 1)
-      const totalDy = startY - lastY
-      const velocity = totalDy / elapsed
+
+      const elapsed = Math.max(performance.now() - edgeStartTime, 1)
+      const releaseVelocity = edgeArmed ? overscroll / elapsed : 0
       const shouldFlip =
-        feeding &&
-        (Math.abs(totalDy) >= SWIPE_DISTANCE ||
-          Math.abs(velocity) >= SWIPE_VELOCITY ||
-          Math.abs(accumulated) >= SWIPE_DISTANCE)
+        edgeArmed &&
+        direction !== 0 &&
+        (Math.abs(overscroll) >= SWIPE_DISTANCE ||
+          (Math.abs(overscroll) >= SWIPE_DISTANCE * 0.55 &&
+            Math.abs(releaseVelocity) >= SWIPE_VELOCITY))
 
       if (shouldFlip) {
-        const direction = totalDy > 0 || accumulated > 0 ? 1 : -1
         goTo(currentSlideIndex() + direction)
-      } else if (feeding) {
-        // 閾値未満は現在スライドへスナップバック
-        goTo(currentSlideIndex())
+      } else {
+        unlockFeed()
       }
 
       tracking = null
-      feeding = false
-      accumulated = 0
-      startY = 0
       lastY = 0
-      startTime = 0
+      edgeArmed = false
+      edgeStartTime = 0
+      overscroll = 0
+      direction = 0
     }
 
     feed.addEventListener('wheel', onWheel, { passive: false })
@@ -410,6 +426,7 @@ export function Feed({ myGenres, onAddGenre, onRemoveGenre }: Props) {
     feed.addEventListener('touchend', finishTouch)
     feed.addEventListener('touchcancel', finishTouch)
     return () => {
+      unlockFeed()
       feed.removeEventListener('wheel', onWheel)
       feed.removeEventListener('touchstart', onTouchStart)
       feed.removeEventListener('touchmove', onTouchMove)
