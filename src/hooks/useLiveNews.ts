@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { newsItems as fallbackNews } from '../data/news'
+import { hasReadableDetail } from '../lib/detail'
 import type { GenreId, NewsApiResponse, NewsItem } from '../types'
 
 const REFRESH_MS = 3 * 60 * 1000
@@ -37,19 +38,32 @@ function isFreshEnough(item: NewsItem, now = Date.now()): boolean {
   return now - published <= MAX_ARTICLE_AGE_MS
 }
 
+/** 詳細がある記事を最新帯へわずかに押し上げる（ジャンル差で詳細が出ないのを防ぐ） */
+function detailBoostMs(item: NewsItem): number {
+  if (!hasReadableDetail(item)) return 0
+  const len = item.detail?.trim().length ?? 0
+  if (len >= 400) return 6 * 60 * 60 * 1000
+  if (len >= 180) return 4 * 60 * 60 * 1000
+  return 75 * 60 * 1000
+}
+
 function sortByNewest(items: NewsItem[]): NewsItem[] {
   return [...items].sort(
     (a, b) =>
-      timeValue(b.publishedAt) - timeValue(a.publishedAt) ||
+      timeValue(b.publishedAt) +
+        detailBoostMs(b) -
+        (timeValue(a.publishedAt) + detailBoostMs(a)) ||
       b.id.localeCompare(a.id),
   )
 }
 
-/** 古い → 新しい（上スワイプで最新、下スワイプで過去） */
+/** 古い → 新しい（上スワイプで最新、下スワイプで過去）。読める詳細を最新着地に寄せる */
 function sortByOldest(items: NewsItem[]): NewsItem[] {
   return [...items].sort(
     (a, b) =>
-      timeValue(a.publishedAt) - timeValue(b.publishedAt) ||
+      timeValue(a.publishedAt) +
+        detailBoostMs(a) -
+        (timeValue(b.publishedAt) + detailBoostMs(b)) ||
       a.id.localeCompare(b.id),
   )
 }

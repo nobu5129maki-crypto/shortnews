@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import type { GenreId, NewsItem } from '../types'
+import { hasReadableDetail } from '../lib/detail'
 import { resolveGenres } from '../lib/genres'
 import { useActiveSlide } from '../hooks/useActiveSlide'
 import { useGenreSeen } from '../hooks/useGenreSeen'
@@ -76,19 +77,31 @@ export function Feed({ myGenres, onAddGenre, onRemoveGenre }: Props) {
 
   const primaryCount = items.length
 
-  /** タブを開いたときの着地位置：最新（未読があればその最新）。古い記事から始まらない */
+  /** タブを開いたときの着地位置：最新（未読があればその最新）。読める詳細がある記事を優先 */
   const landingIndex = useMemo(() => {
     if (items.length === 0) return 0
+    const newestReadable = () => {
+      for (let i = items.length - 1; i >= 0; i -= 1) {
+        if (hasReadableDetail(items[i])) return i
+      }
+      return items.length - 1
+    }
     if (activeTab) {
       const unseen = unseenIdsByGenre.get(activeTab)
       if (unseen && unseen.length > 0) {
         const indices = unseen
           .map((id) => items.findIndex((item) => item.id === id))
           .filter((index) => index >= 0)
-        if (indices.length > 0) return Math.max(...indices)
+        if (indices.length > 0) {
+          const readableUnseen = indices.filter((index) =>
+            hasReadableDetail(items[index]),
+          )
+          if (readableUnseen.length > 0) return Math.max(...readableUnseen)
+          return Math.max(...indices)
+        }
       }
     }
-    return items.length - 1
+    return newestReadable()
   }, [items, activeTab, unseenIdsByGenre])
 
   const continueGenres = useMemo(() => {

@@ -1300,6 +1300,27 @@ function dedupe(items: NewsItem[]): NewsItem[] {
   return result
 }
 
+/** 本文取得が難しいホスト（ペイウォール／薄いRSS） */
+function hardToEnrichHost(url: string): boolean {
+  return /espn\.com|bloomberg\.com|nytimes\.com|ft\.com|wsj\.com|reuters\.com|cnbc\.com/i.test(
+    url,
+  )
+}
+
+function candidateEnrichScore(candidate: FeedCandidate): number {
+  const desc = cleanDetailText(candidate.item.description || '')
+  const descLen = isBoilerplateDetail(desc) ? 0 : desc.length
+  const link = candidate.item.link || candidate.feedUrl || ''
+  let score = 0
+  // すでに読める本文がある候補を優先（詳細が出る記事を落とさない）
+  if (descLen >= 280) score += 6
+  else if (descLen >= 140) score += 4
+  else if (descLen >= 60) score += 2
+  if (isDomesticHost(link) || isDomesticHost(candidate.feedUrl)) score += 3
+  if (hardToEnrichHost(link) && descLen < 140) score -= 4
+  return score
+}
+
 function balanceCandidates(
   items: FeedCandidate[],
   perGenre = 48,
@@ -1321,15 +1342,81 @@ function balanceCandidates(
   const picked: FeedCandidate[] = []
   for (const list of groups.values()) {
     const fresh = preferFresh(list, (candidate) => candidate.item.pubDate, 8)
-    fresh.sort(
-      (a, b) => pubTime(b.item.pubDate) - pubTime(a.item.pubDate),
-    )
+    // 新しい順を主、本文が取れそうな候補を副キーに
+    fresh.sort((a, b) => {
+      const byDate = pubTime(b.item.pubDate) - pubTime(a.item.pubDate)
+      if (byDate !== 0) return byDate
+      return candidateEnrichScore(b) - candidateEnrichScore(a)
+    })
     picked.push(...fresh.slice(0, dynamicPerGenre))
   }
 
   return preferFresh(picked, (candidate) => candidate.item.pubDate, 12)
-    .sort((a, b) => pubTime(b.item.pubDate) - pubTime(a.item.pubDate))
+    .sort((a, b) => {
+      const byDate = pubTime(b.item.pubDate) - pubTime(a.item.pubDate)
+      if (byDate !== 0) return byDate
+      return candidateEnrichScore(b) - candidateEnrichScore(a)
+    })
     .slice(0, dynamicTotal)
+}
+
+function detailWeight(item: NewsItem): number {
+  const detail = item.detail?.trim() ?? ''
+  if (!detail) return 0
+  if (isThinDetail(detail, item.title)) return 1
+  if (detail.length >= 400) return 4
+  if (detail.length >= 180) return 3
+  if (detail.length >= 120) return 2
+  return 1
+}
+
+function hasSubstantialDetail(item: NewsItem): boolean {
+  return detailWeight(item) >= 3
+}
+
+/** 詳細の厚みで最新帯をわずかに押し上げ（薄い速報より読める記事を着地させる） */
+function detailRankBoostMs(item: NewsItem): number {
+  const weight = detailWeight(item)
+  if (weight >= 4) return 6 * 60 * 60 * 1000
+  if (weight >= 3) return 4 * 60 * 60 * 1000
+  if (weight >= 2) return 75 * 60 * 1000
+  return 0
+}
+
+function compareByFreshReadable(a: NewsItem, b: NewsItem): number {
+  const aScore = pubTime(a.publishedAt) + detailRankBoostMs(a)
+  const bScore = pubTime(b.publishedAt) + detailRankBoostMs(b)
+  if (bScore !== aScore) return bScore - aScore
+  return detailWeight(b) - detailWeight(a)
+}
+
+/**
+ * 十分な詳細がある記事が揃っているジャンルは、タイトルだけの薄い記事を落とす。
+ * 本数が足りないときだけ薄い記事を残す。
+ */
+function preferReadablePerGenre(
+  items: NewsItem[],
+  minReadable = 12,
+): NewsItem[] {
+  const groups = new Map<GenreId, NewsItem[]>()
+  for (const item of items) {
+    const list = groups.get(item.genre) ?? []
+    list.push(item)
+    groups.set(item.genre, list)
+  }
+
+  const next: NewsItem[] = []
+  for (const list of groups.values()) {
+    const readable = list.filter((item) => hasSubstantialDetail(item))
+    if (readable.length >= minReadable) {
+      // 中程度以上を残し、タイトル同等の薄い記事は除外
+      const kept = list.filter((item) => detailWeight(item) >= 2)
+      next.push(...(kept.length >= minReadable ? kept : readable))
+      continue
+    }
+    next.push(...list)
+  }
+  return next
 }
 
 function balanceByGenre(
@@ -1353,31 +1440,58 @@ function balanceByGenre(
   const picked: NewsItem[] = []
   for (const list of groups.values()) {
     const fresh = preferFresh(list, (item) => item.publishedAt, 8)
-    // 新しい順を主、詳細の厚さを副キーに（タイトルだけの薄い記事を後ろへ）
-    fresh.sort((a, b) => {
-      const byDate = pubTime(b.publishedAt) - pubTime(a.publishedAt)
-      if (byDate !== 0) return byDate
-      return detailWeight(b) - detailWeight(a)
-    })
+    // 新しさ＋詳細の厚みで並べ、薄い最新記事だけが先頭を独占しないようにする
+    fresh.sort(compareByFreshReadable)
     picked.push(...fresh.slice(0, dynamicPerGenre))
   }
 
   return preferFresh(picked, (item) => item.publishedAt, 12)
-    .sort((a, b) => {
-      const byDate = pubTime(b.publishedAt) - pubTime(a.publishedAt)
-      if (byDate !== 0) return byDate
-      return detailWeight(b) - detailWeight(a)
-    })
+    .sort(compareByFreshReadable)
     .slice(0, dynamicTotal)
 }
 
-function detailWeight(item: NewsItem): number {
-  const detail = item.detail?.trim() ?? ''
-  if (!detail) return 0
-  if (isThinDetail(detail, item.title)) return 1
-  if (detail.length >= 400) return 4
-  if (detail.length >= 180) return 3
-  return 2
+/** 薄い記事を deep 補完でもう一度厚くする（ジャンル差で詳細が出ないのを減らす） */
+async function deepenThinItems(
+  items: NewsItem[],
+  compact: boolean,
+): Promise<NewsItem[]> {
+  const thinIndexes: number[] = []
+  for (let i = 0; i < items.length; i += 1) {
+    if (detailWeight(items[i]) <= 2) thinIndexes.push(i)
+  }
+  if (thinIndexes.length === 0) return items
+
+  const limit = Math.min(thinIndexes.length, compact ? 10 : 20)
+  const targets = thinIndexes.slice(0, limit)
+  const deepened = await mapSettled(targets, compact ? 3 : 4, async (index) => {
+    const item = items[index]
+    if (!item.url && !item.title) return item
+    const enriched = await enrichArticleBody(item.url, item.detail, item.title, {
+      deep: true,
+    })
+    let detail = cleanDetailText(enriched.detail)
+    if (isBoilerplateDetail(detail)) detail = ''
+    if (!detail || detail.length <= (item.detail?.length ?? 0) + 30) {
+      return item
+    }
+    if (isThinDetail(detail, item.title) && detail.length < 160) return item
+    return {
+      ...item,
+      detail,
+      summary: buildSummary(detail),
+      keyPoints: buildKeyPoints(item.title, detail),
+      url: enriched.resolvedUrl || item.url,
+    }
+  })
+
+  const next = items.slice()
+  for (let i = 0; i < targets.length; i += 1) {
+    const result = deepened[i]
+    if (result.status === 'fulfilled') {
+      next[targets[i]] = result.value
+    }
+  }
+  return next
 }
 
 function isDomesticHost(host: string): boolean {
@@ -1594,9 +1708,11 @@ export async function fetchLatestNews(
 
   const shortlisted = balanceCandidates(dedupeCandidates(scoped))
     .slice()
-    .sort(
-      (a, b) => pubTime(b.item.pubDate) - pubTime(a.item.pubDate),
-    )
+    .sort((a, b) => {
+      const byDate = pubTime(b.item.pubDate) - pubTime(a.item.pubDate)
+      if (byDate !== 0) return byDate
+      return candidateEnrichScore(b) - candidateEnrichScore(a)
+    })
 
   // 最新枠は deep 補完で詳細文を厚くする。残りは軽量パスで本数を確保
   const deepCount = Math.min(shortlisted.length, compact ? 18 : 32)
@@ -1633,23 +1749,28 @@ export async function fetchLatestNews(
     )
     .map((result) => result.value as NewsItem)
 
-  const balanced = balanceByGenre(dedupe(newsItems))
+  // 3) 薄い記事を追加 deep 補完し、全ジャンルで詳細が出るようにする
+  const deepened = await deepenThinItems(dedupe(newsItems), compact)
+  const balanced = balanceByGenre(deepened)
   const localized = await mapSettled(balanced, 4, localizeNewsItem)
 
   const results = localized.map((result, index) =>
     result.status === 'fulfilled' ? result.value : balanced[index],
   )
 
+  // 詳細が十分ある記事が揃うジャンルは、タイトルだけの薄い記事を落とす
+  const readable = preferReadablePerGenre(results).sort(compareByFreshReadable)
+
   // 翻訳後は検索ジャンルだけ再確認（組み込みは収集時に適合済み。翻訳ゆれで本数を落とさない）
   if (genreIds && genreIds.length > 0) {
-    return results.filter((item) => {
+    return readable.filter((item) => {
       if (!genreIds.includes(item.genre)) return false
       if (!isSearchGenre(item.genre)) return true
       return titleMatchesSearchQuery(item.title, labelFromGenreId(item.genre))
     })
   }
 
-  return results
+  return readable
 }
 
 export function parseGenreQuery(value: string | null): GenreId[] | undefined {

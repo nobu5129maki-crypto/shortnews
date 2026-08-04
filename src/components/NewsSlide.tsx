@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import type { NewsItem } from '../types'
+import { hasReadableDetail } from '../lib/detail'
 import { resolveGenre } from '../lib/genres'
 import { formatRelativeTime } from '../utils/format'
 import { ActionRail } from './ActionRail'
@@ -33,6 +34,7 @@ export function NewsSlide({
   const genreLabel = resolveGenre(item.genre).label
   const detailText = item.detail?.trim() ?? ''
   const summaryText = item.summary?.trim() ?? ''
+  const readableDetail = hasReadableDetail(item)
   const showKeyPoints =
     item.keyPoints.length > 0 &&
     !item.keyPoints.every(
@@ -43,9 +45,9 @@ export function NewsSlide({
     Boolean(summaryText) &&
     summaryText !== detailText &&
     !detailText.startsWith(summaryText)
-  const showDetail = Boolean(detailText)
-  const showDetailLabel =
-    showDetail && (showSummary || showKeyPoints || detailText.length >= 160)
+  // タイトルだけの薄い本文は出さず、読める詳細だけを「詳細」として表示
+  const showDetail = readableDetail
+  const showDetailLabel = showDetail
 
   useEffect(() => {
     setVideoFailed(false)
