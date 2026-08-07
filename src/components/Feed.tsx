@@ -64,10 +64,8 @@ export function Feed({ myGenres, onAddGenre, onRemoveGenre }: Props) {
   const barGenres = useMemo(() => resolveGenres(myGenres), [myGenres])
   const activeTab = tab && myGenreSet.has(tab) ? tab : myGenres[0] ?? null
 
-  const { newGenreIds, unseenIdsByGenre, markItemSeen } = useGenreSeen(
-    myGenres,
-    liveItems,
-  )
+  const { newGenreIds, unseenIdsByGenre, markItemSeen, markGenreSeen } =
+    useGenreSeen(myGenres, liveItems)
 
   const items = useMemo(() => {
     if (!activeTab || myGenres.length === 0) return []
@@ -166,7 +164,7 @@ export function Feed({ myGenres, onAddGenre, onRemoveGenre }: Props) {
     setShowHint(true)
   }, [activeTab, canSwipeToNextNews, swipeNewsCount])
 
-  // 表示中のスライドを既読にする（タブを開いただけでは消さない）
+  // 表示中のスライドを既読にする（最新を見たらジャンル丸印も消える）
   useEffect(() => {
     if (!activeTab) return
     const current = items[activeIndex]
@@ -178,6 +176,7 @@ export function Feed({ myGenres, onAddGenre, onRemoveGenre }: Props) {
 
   // タブ切替（または初回の記事到着）時だけ最新側へ着地。
   // 自動更新・手動更新では読書中の過去記事から飛ばさない。
+  // 着地＝そのジャンルの最新を見た扱い（切替後に丸印が戻るのを防ぐ）。
   useEffect(() => {
     const node = feedRef.current
     if (!node || !activeTab || items.length === 0) return
@@ -187,6 +186,10 @@ export function Feed({ myGenres, onAddGenre, onRemoveGenre }: Props) {
     landedTabRef.current = activeTab
 
     const index = Math.max(0, Math.min(landingIndex, items.length - 1))
+    const landed = items[index]
+    if (landed) markItemSeen(activeTab, landed.id)
+    markGenreSeen(activeTab)
+
     if (index <= 0) {
       node.scrollTo({ top: 0, behavior: 'auto' })
       return
@@ -194,7 +197,7 @@ export function Feed({ myGenres, onAddGenre, onRemoveGenre }: Props) {
     node
       .querySelector<HTMLElement>(`[data-index="${index}"]`)
       ?.scrollIntoView({ behavior: 'auto', block: 'start' })
-  }, [activeTab, items, landingIndex])
+  }, [activeTab, items, landingIndex, markItemSeen, markGenreSeen])
 
   useEffect(() => {
     if (!showHint) return

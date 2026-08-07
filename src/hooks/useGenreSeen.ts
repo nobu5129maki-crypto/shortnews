@@ -90,29 +90,60 @@ export function useGenreSeen(myGenres: GenreId[], items: NewsItem[]) {
     })
   }, [ready, myGenres, liveIdsByGenre])
 
+  /** ジャンル内の最新本番記事ID（items は古い→新しい順） */
+  const newestLiveIdByGenre = useMemo(() => {
+    const map = new Map<GenreId, string>()
+    for (const [genreId, ids] of liveIdsByGenre) {
+      if (ids.length === 0) continue
+      map.set(genreId, ids[ids.length - 1])
+    }
+    return map
+  }, [liveIdsByGenre])
+
+  /**
+   * 最新丸印は「最新記事が未読」のときだけ。
+   * 古い未読が残っていても、最新を見たら消える（ジャンル切替後に戻るのを防ぐ）。
+   */
   const newGenreIds = useMemo(() => {
     const set = new Set<GenreId>()
     if (!ready) return set
     for (const genreId of myGenres) {
-      const ids = liveIdsByGenre.get(genreId) ?? []
+      const newestId = newestLiveIdByGenre.get(genreId)
       // 表示できる本番記事が無いジャンルにドットを付けない
-      if (ids.length === 0) continue
+      if (!newestId) continue
       if (!Object.prototype.hasOwnProperty.call(seen, genreId)) continue
       const known = new Set(seen[genreId] ?? [])
-      if (ids.some((id) => !known.has(id))) set.add(genreId)
+      if (!known.has(newestId)) set.add(genreId)
     }
     return set
-  }, [ready, myGenres, liveIdsByGenre, seen])
+  }, [ready, myGenres, newestLiveIdByGenre, seen])
 
-  const markItemSeen = useCallback((genreId: GenreId, itemId: string) => {
-    if (!itemId.startsWith('live-')) return
-    setSeen((prev) => {
-      if ((prev[genreId] ?? []).includes(itemId)) return prev
-      const next = { ...prev, [genreId]: mergeIds(prev[genreId], [itemId]) }
-      persistSeen(next)
-      return next
-    })
-  }, [])
+  const markItemSeen = useCallback(
+    (genreId: GenreId, itemId: string) => {
+      if (!itemId.startsWith('live-')) return
+      const newestId = newestLiveIdByGenre.get(genreId)
+      const catchUpAll = newestId === itemId
+      const idsToMerge = catchUpAll
+        ? (liveIdsByGenre.get(genreId) ?? [itemId])
+        : [itemId]
+
+      setSeen((prev) => {
+        const prevIds = prev[genreId] ?? []
+        const merged = mergeIds(prevIds, idsToMerge)
+        if (
+          Object.prototype.hasOwnProperty.call(prev, genreId) &&
+          merged.length === prevIds.length &&
+          merged.every((id, index) => id === prevIds[index])
+        ) {
+          return prev
+        }
+        const next = { ...prev, [genreId]: merged }
+        persistSeen(next)
+        return next
+      })
+    },
+    [liveIdsByGenre, newestLiveIdByGenre],
+  )
 
   const markGenreSeen = useCallback(
     (genreId: GenreId) => {
@@ -136,6 +167,10 @@ export function useGenreSeen(myGenres: GenreId[], items: NewsItem[]) {
     [liveIdsByGenre],
   )
 
+  /**
+   * 着地用の未読。最新が未読のときだけ「新着未読」として扱う。
+   * 最新を見たあとに古い未読へ飛ばさない。
+   */
   const unseenIdsByGenre = useMemo(() => {
     const map = new Map<GenreId, string[]>()
     if (!ready) return map
@@ -143,12 +178,15 @@ export function useGenreSeen(myGenres: GenreId[], items: NewsItem[]) {
       const ids = liveIdsByGenre.get(genreId) ?? []
       if (ids.length === 0) continue
       if (!Object.prototype.hasOwnProperty.call(seen, genreId)) continue
+      const newestId = newestLiveIdByGenre.get(genreId)
+      if (!newestId) continue
       const known = new Set(seen[genreId] ?? [])
+      if (known.has(newestId)) continue
       const unseen = ids.filter((id) => !known.has(id))
       if (unseen.length > 0) map.set(genreId, unseen)
     }
     return map
-  }, [ready, myGenres, liveIdsByGenre, seen])
+  }, [ready, myGenres, liveIdsByGenre, newestLiveIdByGenre, seen])
 
   return {
     newGenreIds,
