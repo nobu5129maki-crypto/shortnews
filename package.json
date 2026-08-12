@@ -11,10 +11,12 @@
     "ship": "bash scripts/ship-to-production.sh"
   },
   "dependencies": {
+    "encoding-japanese": "^2.2.0",
     "react": "^19.2.7",
     "react-dom": "^19.2.7"
   },
   "devDependencies": {
+    "@types/encoding-japanese": "^2.2.1",
     "@types/node": "^24.13.2",
     "@types/react": "^19.2.17",
     "@types/react-dom": "^19.2.3",

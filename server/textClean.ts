@@ -122,6 +122,15 @@ export function repairUtf8Mojibake(value: string): string {
   return value
 }
 
+/** 誤デコードで � が大量に入ったテキスト（Edge で Shift_JIS を UTF-8 読みした典型） */
+export function isGarbledText(value: string): boolean {
+  if (!value) return false
+  const fffd = value.split('\ufffd').length - 1
+  if (fffd >= 8) return true
+  if (value.length >= 40 && fffd / value.length >= 0.03) return true
+  return false
+}
+
 /** RSS / HTML から本文テキストを整形し、定型文を除去 */
 export function cleanDetailText(value: string): string {
   let text = value
@@ -138,11 +147,15 @@ export function cleanDetailText(value: string): string {
     text = text.replace(pattern, ' ')
   }
 
-  return text
+  const cleaned = text
     .replace(/[ \t]+\n/g, '\n')
     .replace(/\n{3,}/g, '\n\n')
     .replace(/[ \t]{2,}/g, ' ')
     .trim()
+
+  // 文字化け本文は空扱いにし、呼び出し側が RSS 本文へフォールバックできるようにする
+  if (isGarbledText(cleaned)) return ''
+  return cleaned
 }
 
 /** 定型文のみ／実質本文なし */

@@ -1,6 +1,8 @@
+import Encoding from 'encoding-japanese'
 import {
   cleanDetailText,
   isBoilerplateDetail,
+  isGarbledText,
   isThinDetail,
   looksTruncated,
   softTrimTruncation,
@@ -269,34 +271,96 @@ async function resolveViaBing(
   return undefined
 }
 
-function normalizeCharset(raw: string): string {
+function normalizeCharset(raw: string): 'UTF8' | 'SJIS' | 'EUCJP' {
   const value = raw.trim().replace(/["']/g, '').toLowerCase()
-  if (!value) return 'utf-8'
-  if (/utf-?8/i.test(value)) return 'utf-8'
-  if (/shift[_-]?jis|sjis|windows-31j|cp932/i.test(value)) return 'shift_jis'
-  if (/euc-?jp/i.test(value)) return 'euc-jp'
-  if (/iso-8859-1|latin-?1|windows-1252/i.test(value)) return 'windows-1252'
-  return value
+  if (!value) return 'UTF8'
+  if (/utf-?8/i.test(value)) return 'UTF8'
+  if (/shift[_-]?jis|sjis|windows-31j|cp932/i.test(value)) return 'SJIS'
+  if (/euc-?jp/i.test(value)) return 'EUCJP'
+  return 'UTF8'
+}
+
+function peekAscii(bytes: Uint8Array, max = 8192): string {
+  const end = Math.min(bytes.length, max)
+  let out = ''
+  for (let i = 0; i < end; i += 1) {
+    out += String.fromCharCode(bytes[i]!)
+  }
+  return out
+}
+
+function decodeWithEncodingJapanese(
+  bytes: Uint8Array,
+  charset: 'UTF8' | 'SJIS' | 'EUCJP',
+): string {
+  const unicode = Encoding.convert(Array.from(bytes), {
+    to: 'UNICODE',
+    from: charset,
+  })
+  return Encoding.codeToString(unicode)
 }
 
 function decodeHtmlBytes(bytes: Uint8Array, contentType: string): string {
   const headerCharset =
     contentType.match(/charset=([^\s;]+)/i)?.[1] ?? ''
-  const head = new TextDecoder('utf-8', { fatal: false }).decode(
-    bytes.slice(0, 4096),
-  )
+  // バイナリのまま ASCII メタを読む（Shift_JIS ページでも charset 宣言は読める）
+  const head = peekAscii(bytes)
   const metaCharset =
     head.match(/<meta[^>]+charset=["']?([a-zA-Z0-9_-]+)/i)?.[1] ||
     head.match(
       /<meta[^>]+http-equiv=["']?content-type["']?[^>]+content=["'][^"']*charset=([a-zA-Z0-9_-]+)/i,
     )?.[1] ||
+    head.match(
+      /<meta[^>]+content=["'][^"']*charset=([a-zA-Z0-9_-]+)[^"']*["'][^>]+http-equiv=["']?content-type/i,
+    )?.[1] ||
     ''
   const charset = normalizeCharset(headerCharset || metaCharset || 'utf-8')
-  try {
-    return new TextDecoder(charset, { fatal: false }).decode(bytes)
-  } catch {
-    return new TextDecoder('utf-8', { fatal: false }).decode(bytes)
+
+  const candidates: string[] = []
+  const pushDecoded = (label: 'UTF8' | 'SJIS' | 'EUCJP') => {
+    try {
+      const text = decodeWithEncodingJapanese(bytes, label)
+      if (text) candidates.push(text)
+    } catch {
+      /* ignore */
+    }
   }
+
+  pushDecoded(charset)
+
+  // Edge の TextDecoder が legacy を持たない場合のフォールバック
+  try {
+    const nativeLabel =
+      charset === 'SJIS'
+        ? 'shift_jis'
+        : charset === 'EUCJP'
+          ? 'euc-jp'
+          : 'utf-8'
+    candidates.push(new TextDecoder(nativeLabel, { fatal: false }).decode(bytes))
+  } catch {
+    /* ignore unsupported label */
+  }
+
+  // メタ未検出時は SJIS / UTF-8 を両方試し、文字化けが少ない方を採用
+  if (!headerCharset && !metaCharset) {
+    pushDecoded('SJIS')
+    pushDecoded('UTF8')
+  } else if (charset !== 'UTF8') {
+    pushDecoded('UTF8')
+  }
+
+  const ranked = [...new Set(candidates)]
+    .filter((text) => text.length > 0)
+    .map((text) => {
+      const fffd = text.split('\ufffd').length - 1
+      const jp = text.match(/[\u3040-\u30ff\u3400-\u9fff]/g)?.length ?? 0
+      return { text, fffd, jp, score: jp * 4 - fffd * 12 }
+    })
+    .sort((a, b) => b.score - a.score)
+
+  const best = ranked[0]
+  if (!best || isGarbledText(best.text)) return ''
+  return best.text
 }
 
 async function fetchHtml(url: string): Promise<string> {
