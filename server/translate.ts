@@ -1,3 +1,5 @@
+import { cleanDetailText } from './textClean.js'
+
 const JP_CHAR = /[\u3040-\u30ff\u3400-\u9fff]/g
 
 export function hasJapanese(text: string): boolean {
@@ -45,8 +47,9 @@ async function translateChunk(text: string): Promise<string> {
 
 /** 英語など非日本語テキストを日本語へ翻訳。既に日本語ならそのまま返す */
 export async function translateToJapanese(text: string): Promise<string> {
-  const trimmed = text.trim()
-  if (!trimmed || hasJapanese(trimmed)) return text
+  // 翻訳前に実体参照を潰す（失敗時に &#8217; 等が画面に残るのを防ぐ）
+  const trimmed = cleanDetailText(text).trim()
+  if (!trimmed || hasJapanese(trimmed)) return trimmed || text
 
   try {
     const chunks = chunkText(trimmed, 1400)
@@ -54,10 +57,10 @@ export async function translateToJapanese(text: string): Promise<string> {
     for (const chunk of chunks) {
       translated.push(await translateChunk(chunk))
     }
-    const result = translated.join('\n').trim()
-    return result || text
+    const result = cleanDetailText(translated.join('\n')).trim()
+    return result || trimmed
   } catch (error) {
     console.warn('[translate]', error)
-    return text
+    return trimmed
   }
 }

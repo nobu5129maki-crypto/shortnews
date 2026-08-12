@@ -11,6 +11,117 @@ const BOILERPLATE_PATTERNS: RegExp[] = [
 const BOILERPLATE_ONLY =
   /^(Google\s*ニュース|Google\s+News|Bing\s*ニュース|検索結果|Yahoo!ニュース|PR TIMES)\s*[。. ]*$/i
 
+/** AI向け英語RSSでよく出る名前付き実体 */
+const NAMED_ENTITIES: Record<string, string> = {
+  amp: '&',
+  lt: '<',
+  gt: '>',
+  quot: '"',
+  apos: "'",
+  nbsp: ' ',
+  ndash: '–',
+  mdash: '—',
+  hellip: '…',
+  lsquo: '‘',
+  rsquo: '’',
+  ldquo: '“',
+  rdquo: '”',
+  sbquo: '‚',
+  bdquo: '„',
+  bull: '•',
+  middot: '·',
+  copy: '©',
+  reg: '®',
+  trade: '™',
+  deg: '°',
+  times: '×',
+  divide: '÷',
+  minus: '−',
+  pound: '£',
+  euro: '€',
+  yen: '¥',
+  cent: '¢',
+}
+
+function codePointToChar(code: number): string {
+  if (!Number.isFinite(code) || code <= 0) return ''
+  if (code === 0x09 || code === 0x0a || code === 0x0d) {
+    return String.fromCodePoint(code)
+  }
+  // 制御文字は落とす（表示上の文字化け・ゴミを防ぐ）
+  if (code < 0x20 || (code >= 0x7f && code <= 0x9f)) return ''
+  if (code > 0x10ffff) return ''
+  try {
+    return String.fromCodePoint(code)
+  } catch {
+    return ''
+  }
+}
+
+/**
+ * HTML / XML の文字実体参照を通常文字へ。
+ * AIジャンルの英語フィード（TechCrunch / Verge 等）で &#8217; などが
+ * 未デコードのまま残り、翻訳失敗時に「文字化け」に見える問題を防ぐ。
+ */
+export function decodeHtmlEntities(value: string): string {
+  if (!value || !value.includes('&')) return value
+
+  let text = value
+  // &amp; 経由の二重エンコードにも数回耐える
+  for (let pass = 0; pass < 3; pass += 1) {
+    const before = text
+    text = text
+      .replace(/&#x([0-9a-fA-F]+);/g, (_, hex: string) =>
+        codePointToChar(Number.parseInt(hex, 16)),
+      )
+      .replace(/&#(\d+);/g, (_, dec: string) =>
+        codePointToChar(Number.parseInt(dec, 10)),
+      )
+      .replace(/&([a-zA-Z][a-zA-Z0-9]+);/g, (match, name: string) => {
+        const mapped = NAMED_ENTITIES[name.toLowerCase()]
+        return mapped !== undefined ? mapped : match
+      })
+    if (text === before) break
+  }
+  return text
+}
+
+/** UTF-8 を Latin-1 として読んだ典型的な文字化けを、明らかに壊れているときだけ戻す */
+export function repairUtf8Mojibake(value: string): string {
+  if (!value) return value
+  // すでに BMP 外・全角などを含む正当な Unicode はそのまま
+  for (let i = 0; i < value.length; i += 1) {
+    if (value.charCodeAt(i) > 0xff) return value
+  }
+
+  let highLatin = 0
+  for (let i = 0; i < value.length; i += 1) {
+    if (value.charCodeAt(i) >= 0x80) highLatin += 1
+  }
+  if (highLatin < 3) return value
+
+  try {
+    const bytes = Uint8Array.from(Array.from(value, (ch) => ch.charCodeAt(0)))
+    const fixed = new TextDecoder('utf-8', { fatal: true }).decode(bytes)
+    if (!fixed || fixed.includes('\ufffd')) return value
+
+    const jpBefore = value.match(/[\u3040-\u30ff\u3400-\u9fff]/g)?.length ?? 0
+    const jpAfter = fixed.match(/[\u3040-\u30ff\u3400-\u9fff]/g)?.length ?? 0
+    let highAfter = 0
+    for (let i = 0; i < fixed.length; i += 1) {
+      const code = fixed.charCodeAt(i)
+      if (code >= 0x80 && code <= 0xff) highAfter += 1
+    }
+    // 日本語が増える、または high-latin ノイズがほぼ消えるとき採用
+    if (jpAfter > jpBefore || (highAfter === 0 && jpAfter >= 2)) {
+      return fixed
+    }
+  } catch {
+    /* keep original */
+  }
+  return value
+}
+
 /** RSS / HTML から本文テキストを整形し、定型文を除去 */
 export function cleanDetailText(value: string): string {
   let text = value
@@ -18,13 +129,10 @@ export function cleanDetailText(value: string): string {
     .replace(/<br\s*\/?>/gi, '\n')
     .replace(/<\/(?:p|div|li|h[1-6]|tr)>/gi, '\n')
     .replace(/<[^>]+>/g, '')
-    .replace(/&amp;/g, '&')
-    .replace(/&lt;/g, '<')
-    .replace(/&gt;/g, '>')
-    .replace(/&quot;/g, '"')
-    .replace(/&#39;/g, "'")
-    .replace(/&nbsp;/g, ' ')
-    .replace(/\r\n?/g, '\n')
+
+  text = decodeHtmlEntities(text)
+  text = repairUtf8Mojibake(text)
+  text = text.replace(/\r\n?/g, '\n')
 
   for (const pattern of BOILERPLATE_PATTERNS) {
     text = text.replace(pattern, ' ')

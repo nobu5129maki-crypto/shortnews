@@ -269,6 +269,36 @@ async function resolveViaBing(
   return undefined
 }
 
+function normalizeCharset(raw: string): string {
+  const value = raw.trim().replace(/["']/g, '').toLowerCase()
+  if (!value) return 'utf-8'
+  if (/utf-?8/i.test(value)) return 'utf-8'
+  if (/shift[_-]?jis|sjis|windows-31j|cp932/i.test(value)) return 'shift_jis'
+  if (/euc-?jp/i.test(value)) return 'euc-jp'
+  if (/iso-8859-1|latin-?1|windows-1252/i.test(value)) return 'windows-1252'
+  return value
+}
+
+function decodeHtmlBytes(bytes: Uint8Array, contentType: string): string {
+  const headerCharset =
+    contentType.match(/charset=([^\s;]+)/i)?.[1] ?? ''
+  const head = new TextDecoder('utf-8', { fatal: false }).decode(
+    bytes.slice(0, 4096),
+  )
+  const metaCharset =
+    head.match(/<meta[^>]+charset=["']?([a-zA-Z0-9_-]+)/i)?.[1] ||
+    head.match(
+      /<meta[^>]+http-equiv=["']?content-type["']?[^>]+content=["'][^"']*charset=([a-zA-Z0-9_-]+)/i,
+    )?.[1] ||
+    ''
+  const charset = normalizeCharset(headerCharset || metaCharset || 'utf-8')
+  try {
+    return new TextDecoder(charset, { fatal: false }).decode(bytes)
+  } catch {
+    return new TextDecoder('utf-8', { fatal: false }).decode(bytes)
+  }
+}
+
 async function fetchHtml(url: string): Promise<string> {
   const response = await fetch(url, {
     headers: FETCH_HEADERS,
@@ -280,7 +310,8 @@ async function fetchHtml(url: string): Promise<string> {
   if (!contentType.includes('html') && !contentType.includes('xml') && !contentType.includes('text')) {
     return ''
   }
-  return response.text()
+  const bytes = new Uint8Array(await response.arrayBuffer())
+  return decodeHtmlBytes(bytes, contentType)
 }
 
 /** Jina Reader で本文を取得（実記事 URL 向け） */

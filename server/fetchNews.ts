@@ -7,7 +7,12 @@ import type {
 import { isSearchGenre, labelFromGenreId } from './types.js'
 import { enrichArticleBody } from './enrichArticle.js'
 import { isRelevantToGenre, titleMatchesSearchQuery } from './genreRelevance.js'
-import { cleanDetailText, isBoilerplateDetail, isThinDetail } from './textClean.js'
+import {
+  cleanDetailText,
+  decodeHtmlEntities,
+  isBoilerplateDetail,
+  isThinDetail,
+} from './textClean.js'
 import { translateToJapanese } from './translate.js'
 
 export type { NewsApiResponse }
@@ -830,15 +835,11 @@ type RssItem = {
 }
 
 function decodeXml(value: string): string {
-  return value
-    .replace(/<!\[CDATA\[([\s\S]*?)\]\]>/g, '$1')
-    .replace(/&amp;/g, '&')
-    .replace(/&lt;/g, '<')
-    .replace(/&gt;/g, '>')
-    .replace(/&quot;/g, '"')
-    .replace(/&#39;/g, "'")
-    .replace(/&nbsp;/g, ' ')
-    .replace(/<[^>]+>/g, '')
+  return decodeHtmlEntities(
+    value
+      .replace(/<!\[CDATA\[([\s\S]*?)\]\]>/g, '$1')
+      .replace(/<[^>]+>/g, ''),
+  )
     .replace(/\s+/g, ' ')
     .trim()
 }
