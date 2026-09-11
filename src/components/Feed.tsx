@@ -452,6 +452,29 @@ export function Feed({ myGenres, onAddGenre, onRemoveGenre }: Props) {
   }, [feedLocked, items.length, activeTab, slideCount])
 
   const onTabChange = (id: GenreId) => {
+    // 表示中ジャンルに新着があるとき、再タップで最新へジャンプ
+    if (id === activeTab && newGenreIds.has(id)) {
+      const node = feedRef.current
+      if (!node || items.length === 0) return
+      let bestIdx = items.length - 1
+      let bestTime = -1
+      for (let i = 0; i < items.length; i += 1) {
+        const item = items[i]
+        if (!item.id.startsWith('live-')) continue
+        const parsed = Date.parse(item.publishedAt)
+        const time = Number.isNaN(parsed) ? 0 : parsed
+        if (time >= bestTime) {
+          bestTime = time
+          bestIdx = i
+        }
+      }
+      node
+        .querySelector<HTMLElement>(`[data-index="${bestIdx}"]`)
+        ?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+      const landed = items[bestIdx]
+      if (landed) markItemSeen(activeTab, landed.id)
+      return
+    }
     setTab(id)
   }
 
@@ -510,7 +533,9 @@ export function Feed({ myGenres, onAddGenre, onRemoveGenre }: Props) {
               {myGenres.length === 0 && 'ジャンル未設定'}
               {myGenres.length > 0 && loading && !updatedAt && '取得中…'}
               {myGenres.length > 0 && !loading && updatedAt && `更新 ${formatClock(updatedAt)}`}
-              {error && <span className="update-error">更新失敗</span>}
+              {error?.kind === 'failed' && (
+                <span className="update-error">更新失敗</span>
+              )}
             </p>
           </div>
         </div>

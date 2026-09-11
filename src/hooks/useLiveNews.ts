@@ -4,19 +4,27 @@ import { hasReadableDetail } from '../lib/detail'
 import type { GenreId, NewsApiResponse, NewsItem } from '../types'
 
 const REFRESH_MS = 3 * 60 * 1000
-const FETCH_TIMEOUT_MS = 28_000
+/** Edge maxDuration(60s) 手前。AIなど重いジャンルの誤タイムアウトを減らす */
+const FETCH_TIMEOUT_MS = 55_000
 const MIN_SWIPE_ITEMS = 12
 const HISTORY_KEY = 'brief.newsHistory.v2'
 const MAX_HISTORY_PER_GENRE = 60
 /** 履歴・表示に残す最大経過時間（古い記事でフィードが埋まるのを防ぐ） */
 const MAX_ARTICLE_AGE_MS = 7 * 24 * 60 * 60 * 1000
 
+export type LiveNewsErrorKind = 'partial' | 'failed'
+
+export type LiveNewsError = {
+  kind: LiveNewsErrorKind
+  message: string
+}
+
 type LiveNewsState = {
   items: NewsItem[]
   updatedAt: string | null
   loading: boolean
   refreshing: boolean
-  error: string | null
+  error: LiveNewsError | null
   source: 'live' | 'fallback' | 'mixed'
   refresh: () => Promise<void>
 }
@@ -250,7 +258,7 @@ export function useLiveNews(myGenres: GenreId[]): LiveNewsState {
   const [updatedAt, setUpdatedAt] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
   const [refreshing, setRefreshing] = useState(false)
-  const [error, setError] = useState<string | null>(null)
+  const [error, setError] = useState<LiveNewsError | null>(null)
   const [source, setSource] = useState<'live' | 'fallback' | 'mixed'>('fallback')
   const requestId = useRef(0)
   const abortRef = useRef<AbortController | null>(null)
@@ -298,8 +306,10 @@ export function useLiveNews(myGenres: GenreId[]): LiveNewsState {
 
       const liveParts: NewsItem[][] = []
       let failures = 0
+      let successes = 0
       for (const result of settled) {
         if (result.status === 'fulfilled') {
+          successes += 1
           liveParts.push(result.value)
         } else if (!controller.signal.aborted) {
           failures += 1
@@ -311,7 +321,11 @@ export function useLiveNews(myGenres: GenreId[]): LiveNewsState {
       }
 
       const live = mergeUnique(liveParts)
-      if (live.length === 0 && failures === selected.length && archived.length === 0) {
+      if (
+        successes === 0 &&
+        failures === selected.length &&
+        archived.length === 0
+      ) {
         throw new Error('all genre fetches failed')
       }
 
@@ -323,20 +337,30 @@ export function useLiveNews(myGenres: GenreId[]): LiveNewsState {
       const archivedNext = historyFor(selected, historyRef.current)
       const ensured = ensureVolume(live, selected, archivedNext)
       setItems(ensured.items)
-      setUpdatedAt(new Date().toISOString())
       setSource(ensured.source)
-      setError(
-        failures > 0
-          ? '一部ジャンルの更新に失敗しました。再試行できます。'
-          : null,
-      )
       hasLive.current = live.length > 0 || archivedNext.length > 0
+
+      if (successes > 0) {
+        // 1ジャンルでも成功したら「更新時刻」を進め、失敗表示は出さない
+        // （AI成功・他ジャンル失敗で「更新失敗なのにAIは更新」と見えるのを防ぐ）
+        setUpdatedAt(new Date().toISOString())
+        setError(null)
+      } else {
+        // 全失敗でも履歴表示中なら失敗バッジを出さず、前回の更新時刻を残す
+        setError(
+          hasLive.current
+            ? null
+            : {
+                kind: 'failed',
+                message: '最新ニュースを取得できませんでした。再試行できます。',
+              },
+        )
+      }
     } catch (err) {
       if (controller.signal.aborted || currentRequest !== requestId.current) {
         return
       }
       console.error(err)
-      setError('最新ニュースを取得できませんでした。再試行できます。')
       const archivedNext = historyFor(selected, historyRef.current)
       setItems((prev) => {
         const scoped = scopeToGenres(prev, selected)
@@ -345,6 +369,17 @@ export function useLiveNews(myGenres: GenreId[]): LiveNewsState {
         }
         return ensureVolume([], selected, archivedNext).items
       })
+      const canShowCached =
+        hasLive.current || archivedNext.length > 0
+      // 表示できる記事があるときは「更新失敗」を出さない（中身は見えているため）
+      setError(
+        canShowCached
+          ? null
+          : {
+              kind: 'failed',
+              message: '最新ニュースを取得できませんでした。再試行できます。',
+            },
+      )
       if (!hasLive.current) setSource(archivedNext.length > 0 ? 'mixed' : 'fallback')
     } finally {
       if (currentRequest === requestId.current) {

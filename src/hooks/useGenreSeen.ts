@@ -90,15 +90,27 @@ export function useGenreSeen(myGenres: GenreId[], items: NewsItem[]) {
     })
   }, [ready, myGenres, liveIdsByGenre])
 
-  /** ジャンル内の最新本番記事ID（items は古い→新しい順） */
+  /**
+   * ジャンル内の最新本番記事ID。
+   * 詳細文ブースト後の並びではなく、公開時刻が最も新しいものを使う
+   * （AIなど詳細差が大きいジャンルで新着ドットが消えるのを防ぐ）。
+   */
   const newestLiveIdByGenre = useMemo(() => {
     const map = new Map<GenreId, string>()
-    for (const [genreId, ids] of liveIdsByGenre) {
-      if (ids.length === 0) continue
-      map.set(genreId, ids[ids.length - 1])
+    const bestTime = new Map<GenreId, number>()
+    for (const item of items) {
+      if (!myGenres.includes(item.genre)) continue
+      if (!isLiveArticleId(item.id)) continue
+      const published = Date.parse(item.publishedAt)
+      const time = Number.isNaN(published) ? 0 : published
+      const prev = bestTime.get(item.genre)
+      if (prev !== undefined && time < prev) continue
+      if (prev === time && map.get(item.genre)! >= item.id) continue
+      bestTime.set(item.genre, time)
+      map.set(item.genre, item.id)
     }
     return map
-  }, [liveIdsByGenre])
+  }, [items, myGenres])
 
   /**
    * 最新丸印は「最新記事が未読」のときだけ。

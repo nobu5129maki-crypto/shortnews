@@ -12,7 +12,7 @@ export function GenreBar({ genres, active, newGenreIds, onChange }: Props) {
     <div className="genre-bar" role="tablist" aria-label="ジャンル">
       {genres.map((genre) => {
         const isActive = genre.id === active
-        const hasNew = Boolean(newGenreIds?.has(genre.id)) && !isActive
+        const hasNew = Boolean(newGenreIds?.has(genre.id))
         return (
           <button
             key={genre.id}
