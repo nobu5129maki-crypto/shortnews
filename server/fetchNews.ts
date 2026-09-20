@@ -5,6 +5,7 @@ import type {
   NewsItem,
 } from './types.js'
 import { isSearchGenre, labelFromGenreId } from './types.js'
+import { Deadline } from './deadline.js'
 import { enrichArticleBody } from './enrichArticle.js'
 import { isRelevantToGenre, titleMatchesSearchQuery } from './genreRelevance.js'
 import {
@@ -13,9 +14,26 @@ import {
   isBoilerplateDetail,
   isThinDetail,
 } from './textClean.js'
-import { translateToJapanese } from './translate.js'
+import { hasJapanese, translateToJapanese } from './translate.js'
 
 export type { NewsApiResponse }
+
+/**
+ * 1 リクエストの時間予算。
+ * Vercel Edge Function は 25 秒以内に応答を開始しないと 504 になる。
+ * 以前は本文補完・翻訳に上限がなく、組み込みジャンル（AI・スポーツ等）が常に 504 だった。
+ */
+const TOTAL_BUDGET_MS = 16_000
+/** RSS 収集に使う最大時間 */
+const COLLECT_BUDGET_MS = 6_500
+/** 翻訳のために最後に残す時間 */
+const TRANSLATE_RESERVE_MS = 4_500
+
+/** ページ本文まで取りに行く記事数（それ以外は RSS の本文だけで組み立てる） */
+const DEEP_ENRICH_COUNT = 12
+const LIGHT_ENRICH_COUNT = 24
+
+type EnrichMode = 'deep' | 'light' | 'none'
 
 type FeedSource = {
   genre: GenreId
@@ -824,7 +842,7 @@ const DEFAULT_POSTERS = [
 ]
 
 const AI_PATTERN =
-  /AI|ＡＩ|人工知能|生成AI|ChatGPT|GPT|機械学習|LLM|オンデバイス|大規模言語|ディープラーニング|チャットボ[ッッ]ト|生成系/i
+  /(?:^|[^A-Za-z0-9])(?:AI|A\.I\.)(?=[^A-Za-z0-9]|$)|ＡＩ|人工知能|生成AI|ChatGPT|(?:^|[^A-Za-z0-9])GPT(?:[^A-Za-z0-9]|$)|機械学習|(?:^|[^A-Za-z0-9])LLM(?:[^A-Za-z0-9]|$)|オンデバイス|大規模言語|ディープラーニング|チャットボ[ッッ]ト|生成系|OpenAI|Anthropic|artificial intelligence/i
 
 type RssItem = {
   title: string
@@ -1123,15 +1141,21 @@ async function toNewsItem(
   genre: GenreId,
   sourceLabel: string,
   feedUrl = '',
-  deep = false,
+  mode: EnrichMode = 'light',
+  deadline?: Deadline,
 ): Promise<NewsItem | null> {
   const seed = hashId(item.link || item.title)
   let description = cleanDetailText(item.description || '')
   if (isBoilerplateDetail(description)) description = ''
 
-  const enriched = await enrichArticleBody(item.link, description, item.title, {
-    deep,
-  })
+  // 'none' は外部取得なし（RSS の本文だけ）。残り時間がないときも同じ扱い
+  const enriched =
+    mode === 'none' || deadline?.expired(1500)
+      ? { detail: description, resolvedUrl: item.link || undefined }
+      : await enrichArticleBody(item.link, description, item.title, {
+          deep: mode === 'deep',
+          deadline,
+        })
   description = cleanDetailText(enriched.detail)
   if (isBoilerplateDetail(description)) description = ''
 
@@ -1171,10 +1195,18 @@ async function toNewsItem(
   }
 }
 
-async function localizeNewsItem(item: NewsItem): Promise<NewsItem> {
+/** タイトルが日本語として読めるか（翻訳が間に合わなかった記事の判定に使う） */
+function isJapaneseItem(item: NewsItem): boolean {
+  return hasJapanese(item.title)
+}
+
+async function localizeNewsItem(
+  item: NewsItem,
+  deadline?: Deadline,
+): Promise<NewsItem> {
   const [title, detailRaw] = await Promise.all([
-    translateToJapanese(item.title),
-    translateToJapanese(item.detail),
+    translateToJapanese(item.title, deadline),
+    translateToJapanese(item.detail, deadline),
   ])
   const detail = cleanDetailText(detailRaw)
   if (
@@ -1201,14 +1233,20 @@ async function localizeNewsItem(item: NewsItem): Promise<NewsItem> {
 }
 
 /** RSS だけ軽く取得し、本文補完前の候補を返す（多ソース向け） */
-async function fetchFeedCandidates(source: FeedSource): Promise<FeedCandidate[]> {
+async function fetchFeedCandidates(
+  source: FeedSource,
+  deadline?: Deadline,
+): Promise<FeedCandidate[]> {
+  if (deadline?.expired(300)) {
+    throw new Error(`RSS ${source.label} skipped: deadline`)
+  }
   const response = await fetch(source.url, {
     headers: {
       Accept:
         'application/rss+xml, application/atom+xml, application/xml, text/xml, */*',
       'User-Agent': 'MYLINE-NewsBot/1.0 (+https://shortnews-theta.vercel.app)',
     },
-    signal: AbortSignal.timeout(8000),
+    signal: AbortSignal.timeout(deadline ? deadline.timeout(8000) : 8000),
   })
   if (!response.ok) {
     throw new Error(`RSS ${source.label} failed: ${response.status}`)
@@ -1455,20 +1493,24 @@ function balanceByGenre(
 async function deepenThinItems(
   items: NewsItem[],
   compact: boolean,
+  deadline?: Deadline,
 ): Promise<NewsItem[]> {
+  if (deadline?.expired(2500)) return items
   const thinIndexes: number[] = []
   for (let i = 0; i < items.length; i += 1) {
     if (detailWeight(items[i]) <= 2) thinIndexes.push(i)
   }
   if (thinIndexes.length === 0) return items
 
-  const limit = Math.min(thinIndexes.length, compact ? 10 : 20)
+  const limit = Math.min(thinIndexes.length, compact ? 6 : 10)
   const targets = thinIndexes.slice(0, limit)
-  const deepened = await mapSettled(targets, compact ? 3 : 4, async (index) => {
+  const deepened = await mapSettled(targets, 5, async (index) => {
     const item = items[index]
     if (!item.url && !item.title) return item
+    if (deadline?.expired(1500)) return item
     const enriched = await enrichArticleBody(item.url, item.detail, item.title, {
       deep: true,
+      deadline,
     })
     let detail = cleanDetailText(enriched.detail)
     if (isBoilerplateDetail(detail)) detail = ''
@@ -1668,11 +1710,54 @@ async function mapSettled<T, R>(
   return results
 }
 
+type CacheEntry = { at: number; items: NewsItem[] }
+/** 同じジャンルの直近結果（同一インスタンス内で共有。3 分の自動更新や複数ユーザーの重複取得を減らす） */
+const resultCache = new Map<string, CacheEntry>()
+const CACHE_FRESH_MS = 120_000
+const CACHE_STALE_MS = 30 * 60 * 1000
+
+function cacheKey(genreIds?: GenreId[]): string {
+  return genreIds && genreIds.length > 0 ? genreIds.slice().sort().join('\n') : '*'
+}
+
+/**
+ * fetchLatestNews のキャッシュ付き版。
+ * - 2 分以内の結果はそのまま返す
+ * - 取得に失敗／0 件のときは 30 分以内の古い結果で代替する
+ */
+export async function fetchLatestNewsCached(
+  genreIds?: GenreId[],
+): Promise<{ items: NewsItem[]; cached: boolean }> {
+  const key = cacheKey(genreIds)
+  const now = Date.now()
+  const hit = resultCache.get(key)
+  if (hit && now - hit.at <= CACHE_FRESH_MS && hit.items.length > 0) {
+    return { items: hit.items, cached: true }
+  }
+  try {
+    const items = await fetchLatestNews(genreIds)
+    if (items.length > 0) {
+      resultCache.set(key, { at: Date.now(), items })
+      return { items, cached: false }
+    }
+    if (hit && now - hit.at <= CACHE_STALE_MS) return { items: hit.items, cached: true }
+    return { items, cached: false }
+  } catch (error) {
+    if (hit && now - hit.at <= CACHE_STALE_MS) {
+      console.warn('[news] fetch failed, serving stale cache', error)
+      return { items: hit.items, cached: true }
+    }
+    throw error
+  }
+}
+
 export async function fetchLatestNews(
   genreIds?: GenreId[],
+  budgetMs = TOTAL_BUDGET_MS,
 ): Promise<NewsItem[]> {
   if (genreIds && genreIds.length === 0) return []
 
+  const overall = Deadline.after(budgetMs)
   const compact = Boolean(genreIds && genreIds.length > 1)
   const feeds =
     genreIds && genreIds.length > 0
@@ -1681,9 +1766,10 @@ export async function fetchLatestNews(
 
   if (feeds.length === 0) return []
 
-  // 1) 多ソースから候補だけ高速収集（本文補完は後段）
-  const settled = await mapSettled(feeds, compact ? 10 : 14, (feed) =>
-    fetchFeedCandidates(feed),
+  // 1) 多ソースから候補だけ高速収集（本文補完は後段）。収集は COLLECT_BUDGET_MS で打ち切る
+  const collectDeadline = overall.sub(COLLECT_BUDGET_MS)
+  const settled = await mapSettled(feeds, compact ? 12 : 16, (feed) =>
+    fetchFeedCandidates(feed, collectDeadline),
   )
   const collected: FeedCandidate[] = []
   const failures: string[] = []
@@ -1715,33 +1801,34 @@ export async function fetchLatestNews(
       return candidateEnrichScore(b) - candidateEnrichScore(a)
     })
 
-  // 最新枠は deep 補完で詳細文を厚くする。残りは軽量パスで本数を確保
-  const deepCount = Math.min(shortlisted.length, compact ? 18 : 32)
+  // 最新枠は deep 補完で詳細文を厚くする。次の枠は軽量パス。それ以外は RSS 本文だけで組み立てる
+  // （以前は全候補のページを取得しており、組み込みジャンルでは Edge の制限時間を必ず超えていた）
+  const deepCount = Math.min(shortlisted.length, compact ? 8 : DEEP_ENRICH_COUNT)
+  const lightCount = Math.min(
+    shortlisted.length - deepCount,
+    compact ? 12 : LIGHT_ENRICH_COUNT,
+  )
   const deepList = shortlisted.slice(0, deepCount)
-  const lightList = shortlisted.slice(deepCount)
+  const lightList = shortlisted.slice(deepCount, deepCount + lightCount)
+  const restList = shortlisted.slice(deepCount + lightCount)
 
-  // 2) 採用候補だけ本文補完（Edge タイムアウト回避）
-  const [deepEnriched, lightEnriched] = await Promise.all([
-    mapSettled(deepList, compact ? 3 : 4, (candidate) =>
-      toNewsItem(
-        candidate.item,
-        candidate.genre,
-        candidate.sourceLabel,
-        candidate.feedUrl,
-        true,
-      ),
-    ),
-    mapSettled(lightList, compact ? 4 : 5, (candidate) =>
-      toNewsItem(
-        candidate.item,
-        candidate.genre,
-        candidate.sourceLabel,
-        candidate.feedUrl,
-        false,
-      ),
-    ),
+  // 2) 採用候補だけ本文補完。翻訳の時間を残して締め切る
+  const enrichDeadline = overall.sub(9_000, TRANSLATE_RESERVE_MS)
+  const build = (mode: EnrichMode, deadline?: Deadline) => (candidate: FeedCandidate) =>
+    toNewsItem(
+      candidate.item,
+      candidate.genre,
+      candidate.sourceLabel,
+      candidate.feedUrl,
+      mode,
+      deadline,
+    )
+  const [deepEnriched, lightEnriched, restBuilt] = await Promise.all([
+    mapSettled(deepList, 6, build('deep', enrichDeadline)),
+    mapSettled(lightList, 8, build('light', enrichDeadline)),
+    mapSettled(restList, 16, build('none')),
   ])
-  const enriched = [...deepEnriched, ...lightEnriched]
+  const enriched = [...deepEnriched, ...lightEnriched, ...restBuilt]
 
   const newsItems = enriched
     .filter(
@@ -1750,14 +1837,24 @@ export async function fetchLatestNews(
     )
     .map((result) => result.value as NewsItem)
 
-  // 3) 薄い記事を追加 deep 補完し、全ジャンルで詳細が出るようにする
-  const deepened = await deepenThinItems(dedupe(newsItems), compact)
+  // 3) 時間が残っていれば薄い記事を追加 deep 補完（全ジャンルで詳細が出るようにする）
+  const deepenDeadline = overall.sub(3_500, TRANSLATE_RESERVE_MS)
+  const deepened = await deepenThinItems(dedupe(newsItems), compact, deepenDeadline)
   const balanced = balanceByGenre(deepened)
-  const localized = await mapSettled(balanced, 4, localizeNewsItem)
 
-  const results = localized.map((result, index) =>
+  // 4) 翻訳。残り時間いっぱいまで使い、間に合わなかった海外記事は後で落とす
+  const translateDeadline = overall.sub(overall.remaining(), 600)
+  const needsTranslation = balanced.filter((item) => !isJapaneseItem(item))
+  const localized = await mapSettled(balanced, needsTranslation.length > 12 ? 8 : 6, (item) =>
+    localizeNewsItem(item, translateDeadline),
+  )
+
+  const translatedAll = localized.map((result, index) =>
     result.status === 'fulfilled' ? result.value : balanced[index],
   )
+  // 翻訳が間に合わなかった英語記事は、日本語記事が十分あるときだけ除外する
+  const japaneseOnly = translatedAll.filter(isJapaneseItem)
+  const results = japaneseOnly.length >= 8 ? japaneseOnly : translatedAll
 
   // 詳細が十分ある記事が揃うジャンルは、タイトルだけの薄い記事を落とす
   const readable = preferReadablePerGenre(results).sort(compareByFreshReadable)

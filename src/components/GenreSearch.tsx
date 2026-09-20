@@ -26,7 +26,9 @@ export function GenreSearch({
     const lower = q.toLowerCase()
     const matches = catalog.filter((genre) => {
       if (myGenres.includes(genre.id)) return false
-      const haystack = `${genre.label} ${genre.blurb ?? ''} ${genre.id}`.toLowerCase()
+      // id は完全一致のみ（"AI" が entertainment の中の "ai" に当たるのを防ぐ）
+      if (genre.id.toLowerCase() === lower) return true
+      const haystack = `${genre.label} ${genre.blurb ?? ''}`.toLowerCase()
       return haystack.includes(lower) || genre.label.includes(q)
     })
 

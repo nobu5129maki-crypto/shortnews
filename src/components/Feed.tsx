@@ -15,6 +15,50 @@ import { SwipeHint } from './SwipeHint'
 import { TextScaleControl } from './TextScaleControl'
 import { useTextScale } from '../hooks/useTextScale'
 
+const LIKED_KEY = 'brief.liked.v1'
+const SAVED_KEY = 'brief.saved.v1'
+const MAX_FLAG_IDS = 200
+
+function readFlagMap(key: string): Record<string, boolean> {
+  try {
+    const raw = localStorage.getItem(key)
+    if (!raw) return {}
+    const parsed = JSON.parse(raw) as unknown
+    if (!parsed || typeof parsed !== 'object') return {}
+    const next: Record<string, boolean> = {}
+    for (const [id, value] of Object.entries(parsed as Record<string, unknown>)) {
+      if (value === true) next[id] = true
+    }
+    return next
+  } catch {
+    return {}
+  }
+}
+
+function persistFlagMap(key: string, map: Record<string, boolean>) {
+  try {
+    const ids = Object.keys(map).filter((id) => map[id])
+    const trimmed = ids.slice(Math.max(0, ids.length - MAX_FLAG_IDS))
+    const next: Record<string, boolean> = {}
+    for (const id of trimmed) next[id] = true
+    localStorage.setItem(key, JSON.stringify(next))
+  } catch {
+    /* ignore quota */
+  }
+}
+
+function toggleFlag(
+  prev: Record<string, boolean>,
+  id: string,
+  key: string,
+): Record<string, boolean> {
+  const next = { ...prev }
+  if (next[id]) delete next[id]
+  else next[id] = true
+  persistFlagMap(key, next)
+  return next
+}
+
 type Props = {
   myGenres: GenreId[]
   onAddGenre: (id: GenreId) => void
@@ -52,6 +96,11 @@ export function Feed({ myGenres, onAddGenre, onRemoveGenre }: Props) {
   const [editorOpen, setEditorOpen] = useState(false)
   const { items: liveItems, updatedAt, loading, refreshing, error, source, refresh } =
     useLiveNews(myGenres)
+
+  useEffect(() => {
+    setLiked(readFlagMap(LIKED_KEY))
+    setSaved(readFlagMap(SAVED_KEY))
+  }, [])
   const {
     scale: textScale,
     canDecrease,
@@ -118,7 +167,7 @@ export function Feed({ myGenres, onAddGenre, onRemoveGenre }: Props) {
   const awaitingGenre =
     Boolean(activeTab) && items.length === 0 && (loading || refreshing)
   const showContinue =
-    Boolean(activeTab) && myGenres.length > 0 && !awaitingGenre && !loading
+    Boolean(activeTab) && myGenres.length > 0 && items.length > 0 && !awaitingGenre
   // 続きカードは最新のさらに先（上スワイプ方向）へ
   const slideCount = items.length + (showContinue ? 1 : 0)
   const swipeNewsCount = useMemo(() => countSwipeNews(items), [items])
@@ -194,9 +243,12 @@ export function Feed({ myGenres, onAddGenre, onRemoveGenre }: Props) {
       node.scrollTo({ top: 0, behavior: 'auto' })
       return
     }
-    node
-      .querySelector<HTMLElement>(`[data-index="${index}"]`)
-      ?.scrollIntoView({ behavior: 'auto', block: 'start' })
+    const slide = node.querySelector<HTMLElement>(`[data-index="${index}"]`)
+    if (!slide) return
+    const prevBehavior = node.style.scrollBehavior
+    node.style.scrollBehavior = 'auto'
+    node.scrollTo({ top: slide.offsetTop, behavior: 'auto' })
+    node.style.scrollBehavior = prevBehavior
   }, [activeTab, items, landingIndex, markItemSeen, markGenreSeen])
 
   useEffect(() => {
@@ -589,10 +641,10 @@ export function Feed({ myGenres, onAddGenre, onRemoveGenre }: Props) {
                 liked={Boolean(liked[item.id])}
                 saved={Boolean(saved[item.id])}
                 onLike={() =>
-                  setLiked((prev) => ({ ...prev, [item.id]: !prev[item.id] }))
+                  setLiked((prev) => toggleFlag(prev, item.id, LIKED_KEY))
                 }
                 onSave={() =>
-                  setSaved((prev) => ({ ...prev, [item.id]: !prev[item.id] }))
+                  setSaved((prev) => toggleFlag(prev, item.id, SAVED_KEY))
                 }
               />
             ))}

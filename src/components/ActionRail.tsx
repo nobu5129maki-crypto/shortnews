@@ -2,7 +2,6 @@ import { formatCount } from '../utils/format'
 
 type Props = {
   likes: number
-  comments: number
   liked: boolean
   saved: boolean
   onLike: () => void
@@ -12,7 +11,6 @@ type Props = {
 
 export function ActionRail({
   likes,
-  comments,
   liked,
   saved,
   onLike,
@@ -37,18 +35,6 @@ export function ActionRail({
           />
         </svg>
         <span>{formatCount(likes + (liked ? 1 : 0))}</span>
-      </button>
-
-      <button type="button" className="action-btn" aria-label="コメント">
-        <svg viewBox="0 0 24 24" aria-hidden="true">
-          <path
-            d="M5 5h14a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H9l-5 4v-4H5a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2z"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="1.8"
-          />
-        </svg>
-        <span>{formatCount(comments)}</span>
       </button>
 
       <button

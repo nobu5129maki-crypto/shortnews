@@ -1,12 +1,11 @@
 import {
-  fetchLatestNews,
+  fetchLatestNewsCached,
   parseGenreQuery,
 } from '../server/fetchNews.js'
 import type { NewsApiResponse } from '../server/types.js'
 
 export const config = {
   runtime: 'edge',
-  maxDuration: 60,
 }
 
 export default async function handler(request: Request): Promise<Response> {
@@ -15,7 +14,7 @@ export default async function handler(request: Request): Promise<Response> {
     const fromG = url.searchParams.getAll('g')
     const genreIds =
       fromG.length > 0 ? fromG : parseGenreQuery(url.searchParams.get('genres'))
-    const items = await fetchLatestNews(genreIds)
+    const { items, cached } = await fetchLatestNewsCached(genreIds)
     const body: NewsApiResponse = {
       updatedAt: new Date().toISOString(),
       items,
@@ -25,6 +24,7 @@ export default async function handler(request: Request): Promise<Response> {
       headers: {
         'Cache-Control': 'private, no-store',
         'Access-Control-Allow-Origin': '*',
+        'X-News-Cache': cached ? 'hit' : 'miss',
       },
     })
   } catch (error) {

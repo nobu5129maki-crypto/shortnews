@@ -237,7 +237,6 @@ export function NewsSlide({
 
       <ActionRail
         likes={item.likes}
-        comments={item.comments}
         liked={liked}
         saved={saved}
         onLike={onLike}

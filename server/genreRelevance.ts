@@ -26,8 +26,9 @@ const RULES: Record<BuiltinGenreId, GenreRule> = {
     exclude: /国会答弁|選挙公報|野球|サッカー|大相撲/i,
   },
   ai: {
+    // 短い "AI" は単語境界必須。available / daily / entertainment への誤爆を防ぐ
     include:
-      /AI|ＡＩ|人工知能|生成AI|ChatGPT|GPT|Gemini|Claude|機械学習|ディープラーニング|LLM|大規模言語|オンデバイスAI|生成系|ニューラルネットワーク|OpenAI|Anthropic|machine learning|deep learning|artificial intelligence/i,
+      /(?:^|[^A-Za-z0-9])(?:AI|A\.I\.)(?=[^A-Za-z0-9]|$)|ＡＩ|人工知能|生成AI|ChatGPT|(?:^|[^A-Za-z0-9])GPT(?:[^A-Za-z0-9]|$)|Gemini|Claude|機械学習|ディープラーニング|(?:^|[^A-Za-z0-9])LLM(?:[^A-Za-z0-9]|$)|大規模言語|オンデバイスAI|生成系|ニューラルネットワーク|OpenAI|Anthropic|machine learning|deep learning|artificial intelligence/i,
   },
   sports: {
     include:

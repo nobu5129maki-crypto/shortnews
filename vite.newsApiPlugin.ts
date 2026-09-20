@@ -1,5 +1,5 @@
 import type { Plugin } from 'vite'
-import { fetchLatestNews, parseGenreQuery } from './server/fetchNews.ts'
+import { fetchLatestNewsCached, parseGenreQuery } from './server/fetchNews.ts'
 import type { NewsApiResponse } from './server/types.ts'
 
 export function newsApiPlugin(): Plugin {
@@ -12,7 +12,8 @@ export function newsApiPlugin(): Plugin {
           const fromG = url.searchParams.getAll('g')
           const genreIds =
             fromG.length > 0 ? fromG : parseGenreQuery(url.searchParams.get('genres'))
-          const items = await fetchLatestNews(genreIds)
+          const { items, cached } = await fetchLatestNewsCached(genreIds)
+          res.setHeader('X-News-Cache', cached ? 'hit' : 'miss')
           const body: NewsApiResponse = {
             updatedAt: new Date().toISOString(),
             items,

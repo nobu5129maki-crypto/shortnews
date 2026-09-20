@@ -4,8 +4,8 @@ import { hasReadableDetail } from '../lib/detail'
 import type { GenreId, NewsApiResponse, NewsItem } from '../types'
 
 const REFRESH_MS = 3 * 60 * 1000
-/** Edge maxDuration(60s) 手前。AIなど重いジャンルの誤タイムアウトを減らす */
-const FETCH_TIMEOUT_MS = 55_000
+/** サーバー側の時間予算（19 秒）＋通信の余裕。Edge は 25 秒で 504 になるため、それより長く待っても意味がない */
+const FETCH_TIMEOUT_MS = 30_000
 const MIN_SWIPE_ITEMS = 12
 const HISTORY_KEY = 'brief.newsHistory.v2'
 const MAX_HISTORY_PER_GENRE = 60
@@ -265,6 +265,12 @@ export function useLiveNews(myGenres: GenreId[]): LiveNewsState {
   const hasLive = useRef(false)
   const historyRef = useRef<HistoryMap>({})
   const genresKey = myGenres.slice().sort().join('\n')
+  const [pendingKey, setPendingKey] = useState(genresKey)
+  // ジャンル追加直後の1フレームで loading が false のまま空表示になるのを防ぐ
+  if (pendingKey !== genresKey) {
+    setPendingKey(genresKey)
+    setLoading(true)
+  }
 
   useEffect(() => {
     historyRef.current = readHistory()

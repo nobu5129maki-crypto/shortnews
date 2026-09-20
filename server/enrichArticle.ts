@@ -1,4 +1,5 @@
 import Encoding from 'encoding-japanese'
+import { Deadline } from './deadline.js'
 import {
   cleanDetailText,
   isBoilerplateDetail,
@@ -195,6 +196,7 @@ function unwrapNestedUrl(link: string): string {
 /** Bing の同名・近い記事から実記事 URL / 説明文を拾う */
 async function resolveViaBing(
   title: string,
+  deadline?: Deadline,
 ): Promise<{ url?: string; description?: string } | undefined> {
   const cleanedTitle = title
     .replace(/\s*[-|｜].*$/, '')
@@ -213,6 +215,8 @@ async function resolveViaBing(
     .slice(0, 2)
 
   for (const query of queries) {
+    // 残り時間が少ないときは検索を諦める（締め切り超過で全体が 504 になるより手元の本文を使う）
+    if (deadline?.expired(1200)) return undefined
     try {
       const endpoint = `https://www.bing.com/news/search?q=${encodeURIComponent(
         query,
@@ -222,7 +226,7 @@ async function resolveViaBing(
           Accept: 'application/rss+xml, application/xml, text/xml, */*',
           'User-Agent': FETCH_HEADERS['User-Agent'],
         },
-        signal: AbortSignal.timeout(2800),
+        signal: AbortSignal.timeout(deadline ? deadline.timeout(2800) : 2800),
       })
       if (!response.ok) continue
       const xml = await response.text()
@@ -363,11 +367,11 @@ function decodeHtmlBytes(bytes: Uint8Array, contentType: string): string {
   return best.text
 }
 
-async function fetchHtml(url: string): Promise<string> {
+async function fetchHtml(url: string, deadline?: Deadline): Promise<string> {
   const response = await fetch(url, {
     headers: FETCH_HEADERS,
     redirect: 'follow',
-    signal: AbortSignal.timeout(3500),
+    signal: AbortSignal.timeout(deadline ? deadline.timeout(3500) : 3500),
   })
   if (!response.ok) return ''
   const contentType = response.headers.get('content-type') ?? ''
@@ -379,15 +383,16 @@ async function fetchHtml(url: string): Promise<string> {
 }
 
 /** Jina Reader で本文を取得（実記事 URL 向け） */
-async function fetchViaJina(url: string): Promise<string> {
+async function fetchViaJina(url: string, deadline?: Deadline): Promise<string> {
   if (isGoogleNewsUrl(url)) return ''
+  if (deadline?.expired(1500)) return ''
   try {
     const response = await fetch(`https://r.jina.ai/${url}`, {
       headers: {
         Accept: 'text/plain',
         'User-Agent': FETCH_HEADERS['User-Agent'],
       },
-      signal: AbortSignal.timeout(4500),
+      signal: AbortSignal.timeout(deadline ? deadline.timeout(4500) : 4500),
     })
     if (!response.ok) return ''
     const markdown = await response.text()
@@ -417,6 +422,8 @@ export type EnrichOptions = {
    * false: Edgeタイムアウト回避の軽量パス
    */
   deep?: boolean
+  /** 残り時間。少なくなったら外部取得を省いて手元の本文で返す */
+  deadline?: Deadline
 }
 
 /** 詳細として十分な本文か（要約1文では不足） */
@@ -441,6 +448,7 @@ export async function enrichArticleBody(
   options: EnrichOptions = {},
 ): Promise<EnrichResult> {
   const deep = Boolean(options.deep)
+  const deadline = options.deadline
   const base = usableText(current)
   const thin = title ? isThinDetail(base, title) : !base
   const truncated = looksTruncated(base)
@@ -451,13 +459,20 @@ export async function enrichArticleBody(
   if (base.length >= (deep ? 1200 : 900) && !truncated && hasSubstantialDetail(base, title)) {
     return { detail: softTrimTruncation(base.slice(0, 4500)), resolvedUrl: url }
   }
+  // 締め切り間際は外部取得をせず、RSS の本文をそのまま使う
+  if (deadline?.expired(1500)) {
+    return {
+      detail: softTrimTruncation(base.slice(0, 4500)),
+      resolvedUrl: url ? unwrapNestedUrl(url) || undefined : undefined,
+    }
+  }
 
   let target = url ? unwrapNestedUrl(url) : ''
   let resolvedUrl = target || undefined
   let candidate = base
 
   if ((!target || isGoogleNewsUrl(target) || thin || truncated || deep) && title) {
-    const viaBing = await resolveViaBing(title)
+    const viaBing = await resolveViaBing(title, deadline)
     if (viaBing?.url) {
       target = viaBing.url
       resolvedUrl = viaBing.url
@@ -485,12 +500,12 @@ export async function enrichArticleBody(
     return { detail: softTrimTruncation(candidate), resolvedUrl }
   }
 
-  if (!target || isGoogleNewsUrl(target)) {
+  if (!target || isGoogleNewsUrl(target) || deadline?.expired(1200)) {
     return { detail: softTrimTruncation(candidate), resolvedUrl }
   }
 
   try {
-    const html = await fetchHtml(target)
+    const html = await fetchHtml(target, deadline)
     let extracted = html ? extractFromHtml(html) : ''
 
     // HTML が薄い／deep 指定時は Jina で本文を補強
@@ -500,7 +515,7 @@ export async function enrichArticleBody(
       looksTruncated(extracted) ||
       (deep && !hasSubstantialDetail(extracted, title))
     if (needJina && (deep || candidate.length < 280)) {
-      const jina = await fetchViaJina(target)
+      const jina = await fetchViaJina(target, deadline)
       if (jina) {
         extracted = pickBestText([extracted, jina], title, extracted)
       }
