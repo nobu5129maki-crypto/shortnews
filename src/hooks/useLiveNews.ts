@@ -9,7 +9,7 @@ const MIN_FOCUS_REFRESH_MS = 90_000
 /** サーバー側の時間予算（19 秒）＋通信の余裕。Edge は 25 秒で 504 になるため、それより長く待っても意味がない */
 const FETCH_TIMEOUT_MS = 30_000
 const MIN_SWIPE_ITEMS = 12
-const HISTORY_KEY = 'brief.newsHistory.v2'
+const HISTORY_KEY = 'brief.newsHistory.v3'
 const MAX_HISTORY_PER_GENRE = 60
 /** 履歴・表示に残す最大経過時間（古い記事でフィードが埋まるのを防ぐ） */
 const MAX_ARTICLE_AGE_MS = 7 * 24 * 60 * 60 * 1000
