@@ -97,19 +97,22 @@ button {
 }
 
 .chrome-row {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
-  align-items: start;
-  column-gap: 16px;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 8px 10px;
 }
 
 .brand-block {
+  flex: 1 1 8.5rem;
   min-width: 0;
-  grid-column: 1;
 }
 
 .top-actions {
-  grid-column: 2;
+  flex: 0 1 auto;
+  margin-left: auto;
+  min-width: 0;
   display: flex;
   flex-direction: column;
   align-items: flex-end;
@@ -136,10 +139,10 @@ button {
 }
 
 .text-scale-btn {
-  min-width: 36px;
+  min-width: 32px;
   min-height: 36px;
   height: 36px;
-  padding: 0 8px;
+  padding: 0 6px;
   font-family: var(--font-brand);
   font-size: 0.78rem;
   font-weight: 600;
@@ -228,8 +231,10 @@ button {
   align-items: center;
   gap: 10px;
   font-family: var(--font-brand);
-  font-size: clamp(1.55rem, 5.8vw, 1.95rem);
+  /* vw だと電話枠の外（PC画面）基準でロゴが膨らみ、文字サイズボタンに重なる */
+  font-size: 1.4rem;
   font-weight: 700;
+  max-width: 100%;
   letter-spacing: -0.03em;
   line-height: 1;
   color: #eef2f7;
@@ -667,7 +672,8 @@ button {
   line-height: 1.4;
   letter-spacing: -0.02em;
   color: #fff;
-  text-wrap: balance;
+  line-break: strict;
+  overflow-wrap: anywhere;
   text-shadow: 0 2px 16px rgba(0, 0, 0, 0.65);
 }
 

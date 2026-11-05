@@ -4,6 +4,8 @@ import { hasReadableDetail } from '../lib/detail'
 import type { GenreId, NewsApiResponse, NewsItem } from '../types'
 
 const REFRESH_MS = 3 * 60 * 1000
+/** タブに戻るたびに全ジャンルを取り直さない（短時間の往復でAPIを連打しない） */
+const MIN_FOCUS_REFRESH_MS = 90_000
 /** サーバー側の時間予算（19 秒）＋通信の余裕。Edge は 25 秒で 504 になるため、それより長く待っても意味がない */
 const FETCH_TIMEOUT_MS = 30_000
 const MIN_SWIPE_ITEMS = 12
@@ -237,16 +239,28 @@ async function fetchGenreNews(
   const timer = window.setTimeout(() => timeoutController.abort(), FETCH_TIMEOUT_MS)
   const onParentAbort = () => timeoutController.abort()
   signal.addEventListener('abort', onParentAbort)
-  try {
+
+  const load = async () => {
     const response = await fetch(`/api/news?${params}`, {
       headers: { Accept: 'application/json' },
       cache: 'no-store',
       signal: timeoutController.signal,
     })
+    if (response.status === 429) return null
     if (!response.ok) throw new Error(`HTTP ${response.status}`)
     const data = (await response.json()) as NewsApiResponse
     if (!Array.isArray(data.items)) throw new Error('invalid news')
     return data.items.filter((item) => item.genre === genre)
+  }
+
+  try {
+    const first = await load()
+    if (first) return first
+    await new Promise((resolve) => window.setTimeout(resolve, 1200))
+    if (timeoutController.signal.aborted) throw new Error('aborted')
+    const second = await load()
+    if (second) return second
+    throw new Error('HTTP 429')
   } finally {
     window.clearTimeout(timer)
     signal.removeEventListener('abort', onParentAbort)
@@ -262,6 +276,7 @@ export function useLiveNews(myGenres: GenreId[]): LiveNewsState {
   const [source, setSource] = useState<'live' | 'fallback' | 'mixed'>('fallback')
   const requestId = useRef(0)
   const abortRef = useRef<AbortController | null>(null)
+  const lastStartedRef = useRef(0)
   const hasLive = useRef(false)
   const historyRef = useRef<HistoryMap>({})
   const genresKey = myGenres.slice().sort().join('\n')
@@ -296,6 +311,7 @@ export function useLiveNews(myGenres: GenreId[]): LiveNewsState {
     const controller = new AbortController()
     abortRef.current = controller
     const currentRequest = ++requestId.current
+    lastStartedRef.current = Date.now()
 
     const archived = historyFor(selected, historyRef.current)
     // 取得前でも履歴＋デモを出して「ドットあるのに記事なし」を防ぐ
@@ -404,7 +420,9 @@ export function useLiveNews(myGenres: GenreId[]): LiveNewsState {
     }, REFRESH_MS)
 
     const onVisible = () => {
-      if (document.visibilityState === 'visible') void refresh()
+      if (document.visibilityState !== 'visible') return
+      if (Date.now() - lastStartedRef.current < MIN_FOCUS_REFRESH_MS) return
+      void refresh()
     }
     document.addEventListener('visibilitychange', onVisible)
     window.addEventListener('online', onVisible)

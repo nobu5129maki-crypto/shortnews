@@ -4,9 +4,9 @@ import type {
   NewsApiResponse,
   NewsItem,
 } from './types.js'
-import { isSearchGenre, labelFromGenreId } from './types.js'
+import { isSearchGenre, labelFromGenreId, toSearchGenreId } from './types.js'
 import { Deadline } from './deadline.js'
-import { enrichArticleBody } from './enrichArticle.js'
+import { canonicalArticleUrl, enrichArticleBody } from './enrichArticle.js'
 import { isRelevantToGenre, titleMatchesSearchQuery } from './genreRelevance.js'
 import {
   cleanDetailText,
@@ -787,18 +787,10 @@ const FEEDS: FeedSource[] = [
   },
 ]
 
-const VIDEOS = [
-  'https://cdn.coverr.co/videos/coverr-newspaper-printing-press-4421/720p.mp4',
-  'https://cdn.coverr.co/videos/coverr-stock-market-data-on-a-screen-4825/720p.mp4',
-  'https://cdn.coverr.co/videos/coverr-close-up-of-a-smartphone-4255/720p.mp4',
-  'https://cdn.coverr.co/videos/coverr-football-stadium-4167/720p.mp4',
-  'https://cdn.coverr.co/videos/coverr-people-watching-a-movie-in-a-cinema-4289/720p.mp4',
-  'https://cdn.coverr.co/videos/coverr-earth-from-space-4225/720p.mp4',
-  'https://cdn.coverr.co/videos/coverr-scientist-working-in-a-lab-5082/720p.mp4',
-  'https://cdn.coverr.co/videos/coverr-modern-city-buildings-4244/720p.mp4',
-  'https://cdn.coverr.co/videos/coverr-typing-on-a-computer-keyboard-1584/720p.mp4',
-  'https://cdn.coverr.co/videos/coverr-artificial-intelligence-robot-5084/720p.mp4',
-]
+/**
+ * 以前使っていた Coverr の直リンクは HTML や 404 を返すようになり、
+ * 全スライドで動画エラーになっていた。再生できない URL は置かない。
+ */
 
 const POSTERS: Record<BuiltinGenreId, string[]> = {
   politics: [
@@ -1187,8 +1179,12 @@ async function toNewsItem(
     related: [],
     source: resolveSourceLabel(sourceLabel, item),
     publishedAt: toIso(item.pubDate),
-    url: resolvedUrl,
-    videoUrl: pick(VIDEOS, seed),
+    url:
+      canonicalArticleUrl(resolvedUrl) ||
+      (resolvedUrl && !/\/images\/\d+|\.(?:jpe?g|png|gif|webp|avif)(?:$|\?)/i.test(resolvedUrl)
+        ? resolvedUrl
+        : undefined),
+    videoUrl: '',
     posterUrl: pick(postersFor(genre), seed),
     likes: 200 + (seed % 8000),
     comments: 20 + (seed % 500),
@@ -1713,8 +1709,51 @@ async function mapSettled<T, R>(
 type CacheEntry = { at: number; items: NewsItem[] }
 /** 同じジャンルの直近結果（同一インスタンス内で共有。3 分の自動更新や複数ユーザーの重複取得を減らす） */
 const resultCache = new Map<string, CacheEntry>()
+const inflightFetches = new Map<string, Promise<NewsItem[]>>()
 const CACHE_FRESH_MS = 120_000
 const CACHE_STALE_MS = 30 * 60 * 1000
+/** 同時に走らせる重い取得の上限。公開APIの連打で実行時間が雪だるま式に増えるのを防ぐ */
+const MAX_HEAVY_FETCHES = 8
+let heavyInflight = 0
+
+export class NewsBusyError extends Error {
+  constructor() {
+    super('news_busy')
+    this.name = 'NewsBusyError'
+  }
+}
+
+const MAX_GENRE_PARAMS = 12
+const MAX_PLAIN_GENRE_LEN = 40
+
+/** クエリのジャンル指定を、長さ・件数とも有限に揃える */
+export function sanitizeGenreIds(ids: string[]): GenreId[] {
+  const out: GenreId[] = []
+  const seen = new Set<string>()
+  for (const raw of ids) {
+    let id = raw.trim()
+    if (!id) continue
+    if (isSearchGenre(id)) {
+      const label = labelFromGenreId(id).trim().slice(0, 40)
+      if (!label) continue
+      id = toSearchGenreId(label)
+    } else if (id.length > MAX_PLAIN_GENRE_LEN) {
+      continue
+    }
+    if (seen.has(id)) continue
+    seen.add(id)
+    out.push(id)
+    if (out.length >= MAX_GENRE_PARAMS) break
+  }
+  return out
+}
+
+export function genresFromSearchParams(params: URLSearchParams): GenreId[] {
+  const fromG = params.getAll('g')
+  const raw =
+    fromG.length > 0 ? fromG : (parseGenreQuery(params.get('genres')) ?? [])
+  return sanitizeGenreIds(raw)
+}
 
 function cacheKey(genreIds?: GenreId[]): string {
   return genreIds && genreIds.length > 0 ? genreIds.slice().sort().join('\n') : '*'
@@ -1734,20 +1773,45 @@ export async function fetchLatestNewsCached(
   if (hit && now - hit.at <= CACHE_FRESH_MS && hit.items.length > 0) {
     return { items: hit.items, cached: true }
   }
-  try {
-    const items = await fetchLatestNews(genreIds)
-    if (items.length > 0) {
-      resultCache.set(key, { at: Date.now(), items })
-      return { items, cached: false }
-    }
-    if (hit && now - hit.at <= CACHE_STALE_MS) return { items: hit.items, cached: true }
-    return { items, cached: false }
-  } catch (error) {
-    if (hit && now - hit.at <= CACHE_STALE_MS) {
-      console.warn('[news] fetch failed, serving stale cache', error)
+
+  const pending = inflightFetches.get(key)
+  if (pending) {
+    const items = await pending
+    return { items, cached: true }
+  }
+
+  if (heavyInflight >= MAX_HEAVY_FETCHES) {
+    if (hit && now - hit.at <= CACHE_STALE_MS && hit.items.length > 0) {
       return { items: hit.items, cached: true }
     }
-    throw error
+    throw new NewsBusyError()
+  }
+
+  heavyInflight += 1
+  const job = (async () => {
+    try {
+      const items = await fetchLatestNews(genreIds)
+      if (items.length > 0) resultCache.set(key, { at: Date.now(), items })
+      if (items.length === 0 && hit && Date.now() - hit.at <= CACHE_STALE_MS) {
+        return hit.items
+      }
+      return items
+    } catch (error) {
+      if (hit && Date.now() - hit.at <= CACHE_STALE_MS) {
+        console.warn('[news] fetch failed, serving stale cache', error)
+        return hit.items
+      }
+      throw error
+    }
+  })()
+
+  inflightFetches.set(key, job)
+  try {
+    const items = await job
+    return { items, cached: false }
+  } finally {
+    heavyInflight -= 1
+    inflightFetches.delete(key)
   }
 }
 
@@ -1874,8 +1938,5 @@ export async function fetchLatestNews(
 export function parseGenreQuery(value: string | null): GenreId[] | undefined {
   if (value === null) return undefined
   if (value.trim() === '') return []
-  return value
-    .split(',')
-    .map((part) => part.trim())
-    .filter((part) => part.length > 0)
+  return sanitizeGenreIds(value.split(','))
 }

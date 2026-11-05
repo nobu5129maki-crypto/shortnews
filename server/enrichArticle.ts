@@ -172,6 +172,34 @@ function isGoogleNewsUrl(url: string): boolean {
   return /news\.google\.com\/(rss\/)?articles\//i.test(url)
 }
 
+function isImageLikeUrl(url: string): boolean {
+  return (
+    /\/images\/\d+(?:\/|$|\?)/i.test(url) ||
+    /\.(?:jpe?g|png|gif|webp|avif)(?:$|\?)/i.test(url)
+  )
+}
+
+/** 記事URLとして開ける形に整える。画像ページや検索エンジンのURLは捨てる */
+export function canonicalArticleUrl(url: string | undefined): string | undefined {
+  if (!url) return undefined
+  const trimmed = url.trim()
+  if (!/^https?:\/\//i.test(trimmed)) return undefined
+  try {
+    const parsed = new URL(trimmed)
+    parsed.hash = ''
+    parsed.pathname = parsed.pathname.replace(/\/images\/\d+\/?$/i, '/')
+    parsed.pathname = parsed.pathname.replace(/\/+$/, '') || '/'
+    const next = parsed.toString()
+    if (isGoogleNewsUrl(next) || isImageLikeUrl(next)) return undefined
+    if (/bing\.com|microsoft\.com|msn\.com|google\.com/i.test(parsed.hostname)) {
+      return undefined
+    }
+    return next
+  } catch {
+    return undefined
+  }
+}
+
 function unwrapNestedUrl(link: string): string {
   if (!link) return link
   try {
@@ -450,32 +478,38 @@ export async function enrichArticleBody(
   const deep = Boolean(options.deep)
   const deadline = options.deadline
   const base = usableText(current)
-  const thin = title ? isThinDetail(base, title) : !base
   const truncated = looksTruncated(base)
+  const unwrapped = url ? unwrapNestedUrl(url) : ''
+  const safeLink =
+    canonicalArticleUrl(unwrapped) ||
+    (unwrapped && !isImageLikeUrl(unwrapped) ? unwrapped : undefined)
   if (!url && !title) {
     return { detail: softTrimTruncation(base) }
   }
   // すでに十分な本文があるときだけ即返す
   if (base.length >= (deep ? 1200 : 900) && !truncated && hasSubstantialDetail(base, title)) {
-    return { detail: softTrimTruncation(base.slice(0, 4500)), resolvedUrl: url }
+    return { detail: softTrimTruncation(base.slice(0, 4500)), resolvedUrl: safeLink }
   }
   // 締め切り間際は外部取得をせず、RSS の本文をそのまま使う
   if (deadline?.expired(1500)) {
     return {
       detail: softTrimTruncation(base.slice(0, 4500)),
-      resolvedUrl: url ? unwrapNestedUrl(url) || undefined : undefined,
+      resolvedUrl: safeLink,
     }
   }
 
-  let target = url ? unwrapNestedUrl(url) : ''
-  let resolvedUrl = target || undefined
+  // 画像URL（Yahoo の /images/000 など）は記事URLへ戻す。戻せないものはリンクに使わない
+  let target = canonicalArticleUrl(unwrapped) ?? ''
+  let resolvedUrl: string | undefined = target || safeLink
   let candidate = base
 
-  if ((!target || isGoogleNewsUrl(target) || thin || truncated || deep) && title) {
+  // 実記事URLがあるときは検索結果で上書きしない（画像ページや別記事にすり替わるのを防ぐ）
+  if (!target && title) {
     const viaBing = await resolveViaBing(title, deadline)
-    if (viaBing?.url) {
-      target = viaBing.url
-      resolvedUrl = viaBing.url
+    const viaUrl = canonicalArticleUrl(viaBing?.url)
+    if (viaUrl) {
+      target = viaUrl
+      resolvedUrl = viaUrl
     }
     if (viaBing?.description && viaBing.description.length > candidate.length) {
       candidate = viaBing.description

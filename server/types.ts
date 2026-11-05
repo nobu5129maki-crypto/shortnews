@@ -56,8 +56,11 @@ export function isSearchGenre(id: GenreId): boolean {
   return id.startsWith(SEARCH_PREFIX)
 }
 
+const MAX_SEARCH_LABEL = 40
+
 export function toSearchGenreId(label: string): GenreId {
-  return `${SEARCH_PREFIX}${encodeURIComponent(label.trim())}`
+  const trimmed = label.trim().slice(0, MAX_SEARCH_LABEL)
+  return `${SEARCH_PREFIX}${encodeURIComponent(trimmed)}`
 }
 
 export function labelFromGenreId(id: GenreId): string {

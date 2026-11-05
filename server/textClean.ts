@@ -131,6 +131,50 @@ export function isGarbledText(value: string): boolean {
   return false
 }
 
+const NAV_LINE =
+  /^(share|シェア|メディア|マイページ|写真の記事を読む|画像の記事を読む|この記事を読む|続きを読む|関連記事|関連リンク|おすすめ|おすすめ記事|pr|広告|cookie|menu|検索)$/i
+
+const TAIL_LINE =
+  /^(こんな記事も読まれています|関連記事|関連リンク|おすすめ記事|こちらもおすすめ|【関連リンク】|【関連記事】)$/
+
+/**
+ * 本文抽出（Jina 等）が残す画像マークダウン・ナビ・関連リンク欄を落とす。
+ * `![Image 13: …](url)` や空の `[](` が画面にそのまま出るのを防ぐ。
+ */
+function stripReaderNoise(value: string): string {
+  let text = value
+  text = text.replace(/!\[[^\]]*\]\([^)\n]*\)/g, '')
+  text = text.replace(/!\[[^\]]*\]\(?/g, '')
+  text = text.replace(/\[([^\]]*)\]\([^)\n]*\)/g, (_full, label: string) => {
+    const caption = label.trim()
+    if (!caption || /^image\s+\d+/i.test(caption) || caption.length < 12) return ''
+    return caption
+  })
+  text = text.replace(/\[\]\([^)\n]*\)?/g, '')
+  text = text.replace(/^!Image\s+\d+\s*:\s*/gim, '')
+  text = text.replace(/^#{1,6}\s+/gm, '')
+  text = text.replace(/^\*\s+/gm, '')
+
+  const kept: string[] = []
+  for (const raw of text.split('\n')) {
+    const line = raw.trim()
+    if (!line) {
+      if (kept.length > 0 && kept[kept.length - 1] !== '') kept.push('')
+      continue
+    }
+    if (TAIL_LINE.test(line)) break
+    if (NAV_LINE.test(line)) continue
+    if (/^\[\]\(/.test(line)) continue
+    if (/^image\s+\d+\s*:/i.test(line)) continue
+    if (/^【画像】/.test(line)) continue
+    if (/^https?:\/\/\S+$/i.test(line)) continue
+    if (kept.length > 0 && kept[kept.length - 1] === line) continue
+    kept.push(line)
+  }
+
+  return kept.join('\n').replace(/\n{3,}/g, '\n\n').trim()
+}
+
 /** RSS / HTML から本文テキストを整形し、定型文を除去 */
 export function cleanDetailText(value: string): string {
   let text = value
@@ -142,6 +186,7 @@ export function cleanDetailText(value: string): string {
   text = decodeHtmlEntities(text)
   text = repairUtf8Mojibake(text)
   text = text.replace(/\r\n?/g, '\n')
+  text = stripReaderNoise(text)
 
   for (const pattern of BOILERPLATE_PATTERNS) {
     text = text.replace(pattern, ' ')

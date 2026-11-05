@@ -24,7 +24,11 @@ export function normalizeGenreId(input: string): GenreId | null {
   )
   if (exact) return exact.id
 
-  if (isSearchGenre(trimmed)) return trimmed
+  if (isSearchGenre(trimmed)) {
+    const label = labelFromGenreId(trimmed).trim()
+    if (!label) return null
+    return toSearchGenreId(label)
+  }
   if (builtinIds.has(trimmed as GenreId)) return trimmed
 
   return toSearchGenreId(trimmed)

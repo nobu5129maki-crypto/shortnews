@@ -14,23 +14,8 @@ export const genres: Genre[] = [
 
 export type { BuiltinGenreId }
 
-const videos = [
-  'https://cdn.coverr.co/videos/coverr-newspaper-printing-press-4421/720p.mp4',
-  'https://cdn.coverr.co/videos/coverr-stock-market-data-on-a-screen-4825/720p.mp4',
-  'https://cdn.coverr.co/videos/coverr-close-up-of-a-smartphone-4255/720p.mp4',
-  'https://cdn.coverr.co/videos/coverr-football-stadium-4167/720p.mp4',
-  'https://cdn.coverr.co/videos/coverr-people-watching-a-movie-in-a-cinema-4289/720p.mp4',
-  'https://cdn.coverr.co/videos/coverr-earth-from-space-4225/720p.mp4',
-  'https://cdn.coverr.co/videos/coverr-scientist-working-in-a-lab-5082/720p.mp4',
-  'https://cdn.coverr.co/videos/coverr-modern-city-buildings-4244/720p.mp4',
-  'https://cdn.coverr.co/videos/coverr-typing-on-a-computer-keyboard-1584/720p.mp4',
-  'https://cdn.coverr.co/videos/coverr-person-working-on-a-laptop-5636/720p.mp4',
-  'https://cdn.coverr.co/videos/coverr-woman-jogging-in-the-park-4257/720p.mp4',
-  'https://cdn.coverr.co/videos/coverr-busy-city-traffic-at-night-1583/720p.mp4',
-  'https://cdn.coverr.co/videos/coverr-artificial-intelligence-robot-5084/720p.mp4',
-  'https://cdn.coverr.co/videos/coverr-a-man-working-on-his-laptop-5664/720p.mp4',
-  'https://cdn.coverr.co/videos/coverr-aerial-view-of-a-city-at-night-5722/720p.mp4',
-]
+/** Coverr の直リンクは再生できないため、デモ記事は静止画のみにする */
+const videos = Array.from({ length: 16 }, () => '')
 
 const baseNewsItems: NewsItem[] = [
   {

@@ -28,7 +28,7 @@ export function NewsSlide({
   const metaRef = useRef<HTMLDivElement>(null)
   const [paused, setPaused] = useState(false)
   const [progress, setProgress] = useState(0)
-  const [videoFailed, setVideoFailed] = useState(false)
+  const [videoFailed, setVideoFailed] = useState(() => !item.videoUrl)
   const [videoReady, setVideoReady] = useState(false)
   const [metaScrollable, setMetaScrollable] = useState(false)
   const genreLabel = resolveGenre(item.genre).label
@@ -50,11 +50,11 @@ export function NewsSlide({
   const showDetailLabel = showDetail
 
   useEffect(() => {
-    setVideoFailed(false)
+    setVideoFailed(!item.videoUrl)
     setVideoReady(false)
     setProgress(0)
     setPaused(false)
-  }, [item.id])
+  }, [item.id, item.videoUrl])
 
   useEffect(() => {
     const video = videoRef.current
@@ -156,7 +156,7 @@ export function NewsSlide({
           alt=""
           draggable={false}
         />
-        {!videoFailed && (
+        {item.videoUrl && !videoFailed && (
           <video
             ref={videoRef}
             className={`slide-video${videoReady ? ' is-ready' : ''}`}
