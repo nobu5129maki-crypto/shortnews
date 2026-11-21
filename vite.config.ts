@@ -4,11 +4,14 @@ import { VitePWA } from 'vite-plugin-pwa'
 import { newsApiPlugin } from './vite.newsApiPlugin.ts'
 
 export default defineConfig({
+  // ドメイン直下でも /shortnews/ でも同じビルドで動かす
+  base: './',
   plugins: [
     react(),
     newsApiPlugin(),
     VitePWA({
       registerType: 'autoUpdate',
+      injectRegister: null,
       includeAssets: [
         'favicon.svg',
         'favicon-16.png',
@@ -17,15 +20,15 @@ export default defineConfig({
         'brand/*.png',
       ],
       manifest: {
-        id: '/',
+        id: './',
         name: 'MYLINE — 興味だけのレーン',
         short_name: 'MYLINE',
         description:
           '興味のある情報だけを、上スワイプでさくっと掴むアプリ。',
         lang: 'ja',
         dir: 'ltr',
-        start_url: '/',
-        scope: '/',
+        start_url: './',
+        scope: './',
         display: 'standalone',
         display_override: ['standalone', 'browser'],
         orientation: 'portrait-primary',
@@ -34,19 +37,19 @@ export default defineConfig({
         categories: ['news', 'magazines'],
         icons: [
           {
-            src: '/icons/icon-192.png',
+            src: 'icons/icon-192.png',
             sizes: '192x192',
             type: 'image/png',
             purpose: 'any',
           },
           {
-            src: '/icons/icon-512.png',
+            src: 'icons/icon-512.png',
             sizes: '512x512',
             type: 'image/png',
             purpose: 'any',
           },
           {
-            src: '/icons/maskable-512.png',
+            src: 'icons/maskable-512.png',
             sizes: '512x512',
             type: 'image/png',
             purpose: 'maskable',
@@ -57,18 +60,18 @@ export default defineConfig({
             name: '最新フィード',
             short_name: 'フィード',
             description: '選んだジャンルの最新ニュースを開く',
-            url: '/',
-            icons: [{ src: '/icons/icon-192.png', sizes: '192x192' }],
+            url: './',
+            icons: [{ src: 'icons/icon-192.png', sizes: '192x192' }],
           },
         ],
       },
       workbox: {
         cleanupOutdatedCaches: true,
-        navigateFallback: '/index.html',
+        navigateFallback: 'index.html',
         globPatterns: ['**/*.{js,css,html,svg,png,ico,webp,woff2}'],
         runtimeCaching: [
           {
-            urlPattern: ({ url }) => url.pathname.startsWith('/api/news'),
+            urlPattern: ({ url }) => url.pathname.includes('/api/news'),
             handler: 'NetworkOnly',
             method: 'GET',
           },

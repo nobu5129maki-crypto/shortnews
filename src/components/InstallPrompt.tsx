@@ -53,7 +53,13 @@ export function InstallPrompt() {
 
   return (
     <div className="install-banner" role="dialog" aria-label="アプリをインストール">
-      <img className="install-icon" src="/icons/icon-192.png" alt="" width={44} height={44} />
+      <img
+        className="install-icon"
+        src={`${import.meta.env.BASE_URL}icons/icon-192.png`}
+        alt=""
+        width={44}
+        height={44}
+      />
       <div className="install-copy">
         <p className="install-title">MYLINEをホーム画面へ</p>
         <p className="install-text">
