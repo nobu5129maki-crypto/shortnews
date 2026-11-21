@@ -29,7 +29,7 @@ function sn_news_fail($status, $error, $message)
     echo json_encode(array(
         'error' => $error,
         'message' => $message,
-    ));
+    ), JSON_UNESCAPED_UNICODE);
     exit;
 }
 
@@ -510,4 +510,4 @@ echo json_encode(array(
     'updatedAt' => gmdate('c'),
     'items' => $merged,
     'source' => 'live',
-));
+), JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
