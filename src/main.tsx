@@ -4,17 +4,12 @@ import { registerSW } from 'virtual:pwa-register'
 import './index.css'
 import App from './App.tsx'
 
-// 古いキャッシュで旧UIが残らないよう、更新を検知したら即リロード
+// ログイン画面と同じ sw.js を共有する。更新のたびに再読み込みすると画面が往復する。
 registerSW({
   immediate: true,
-  onNeedRefresh() {
-    window.location.reload()
-  },
+  onNeedReload() {},
   onRegisteredSW(_url, registration) {
     void registration?.update()
-    window.setInterval(() => {
-      void registration?.update()
-    }, 60_000)
   },
 })
 

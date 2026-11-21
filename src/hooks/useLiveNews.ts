@@ -241,7 +241,7 @@ async function fetchGenreNews(
   signal.addEventListener('abort', onParentAbort)
 
   const load = async () => {
-    const response = await fetch(`/api/news?${params}`, {
+    const response = await fetch(`${import.meta.env.BASE_URL}api/news?${params}`, {
       headers: { Accept: 'application/json' },
       cache: 'no-store',
       signal: timeoutController.signal,
